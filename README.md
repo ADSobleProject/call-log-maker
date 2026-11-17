@@ -161,6 +161,8 @@
   - 또는 [python.org Windows 다운로드](https://www.python.org/downloads/windows/) 에서 **Windows installer (64-bit)** 3.12
     (설치 화면에서 **“Add python.exe to PATH”** 체크)
 - 첫 실행 시 `.venv` 폴더가 생기고 패키지를 내려받습니다. 그 뒤로는 실행이 빠릅니다.
+- 이미 있던 `.venv` 가 쓸 수 없는 상태(파이썬 없음·32비트 등)면 지우지 않고 `.venv.broken-<시각>` 으로
+  옮겨 둔 뒤 새로 만듭니다. (옮겨 둔 폴더는 지워도 됩니다)
 - Windows SmartScreen 경고가 뜨면 **추가 정보 ▸ 실행**을 누르면 됩니다. (직접 받은 파일이라 안전)
 - 한 번에 많은 파일을 돌리면 시간이 걸립니다. 창을 닫지 말고 기다려 주세요.
 - 지원하지 않는 파일(예: `.pdf`)과 빈 파일은 건너뜁니다.
@@ -175,7 +177,7 @@
 | `Python was not found` | Python 설치 후 다시 실행. 한 줄: `winget install -e --id Python.Python.3.12` |
 | `faster-whisper ... depends on onnxruntime`, `no matching distributions available for your environment: onnxruntime` | **32비트 Python** 이면 음성 패키지가 없습니다. 64비트 Python 3.12 를 설치하고 `설치_점검.bat` 실행 |
 | `av-12.3.0.tar.gz` 를 빌드하다가 멈춤 / 오래 걸림 | 같은 이유(맞는 wheel 없음). 소스 빌드를 막아 두었으니 64비트 3.12 설치가 정답 |
-| Python 3.13/3.14 에서 설치 실패 | 이 버전용 wheel 이 아직 없을 수 있습니다. 64비트 3.12 를 함께 설치하면 `_setup.bat` 이 그것을 골라 씁니다 |
+| Python 3.13/3.14 에서 설치 실패 | 이 버전용 wheel 이 아직 없을 수 있습니다. 64비트 3.12 를 함께 설치한 뒤 `설치_점검.bat` 을 실행하면 3.12 로 맞춰 다시 준비합니다 |
 | 음성 파일이 변환되지 않음 | 위 안내대로 64비트 Python 3.12 설치 → `설치_점검.bat` → `.venv\Scripts\python -m calllog doctor` 로 확인 |
 | `.txt` 는 되는데 음성만 안 됨 | 정상 동작입니다(선택 패키지 미설치). 그대로 `.txt` 를 쓰거나 위 방법으로 음성 변환을 켜면 됩니다 |
 | 받아쓰기가 부정확 | `config.json` 에서 `model` 을 `medium` 으로, 조용한 녹음 사용 |
