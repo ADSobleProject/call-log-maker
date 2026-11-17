@@ -125,7 +125,7 @@
 | `input_dir` / `output_dir` / `processed_dir` | `input` / `output` / `processed` | 폴더 경로(상대·절대 모두 가능) |
 | `archive_processed` | `true` | 변환한 원본을 `processed_dir` 로 이동 |
 | `keep_raw_transcript` | `false` | 음성 전사 원문(`_전사원문.txt`)도 함께 저장 |
-| `watch_interval_sec` | `3` | 폴더 감시 주기(초) |
+| `watch_interval_sec` | `1.5` | 폴더 감시 주기(초) |
 | `max_keywords` | `10` | 키워드 개수 |
 | `max_summary_sentences` | `5` | 핵심 요약 문장 수 |
 | `max_action_items` | `8` | 후속 할 일 개수 |
@@ -165,6 +165,7 @@
 | 음성 파일이 변환되지 않음 | `doctor` 로 점검: `.venv\Scripts\python -m calllog doctor` |
 | 받아쓰기가 부정확 | `config.json` 에서 `model` 을 `medium` 으로, 조용한 녹음 사용 |
 | 결과가 안 생김 | `input` 폴더 위치와 `config.json` 의 `input_dir` 가 같은지 확인 |
+| 패키지가 꼬임 | `.venv` 폴더를 지우고 다시 실행하면 새로 설치합니다 |
 
 ---
 

@@ -1,7 +1,7 @@
 @echo off
 REM ---------------------------------------------------------------
 REM  Keep this window open: new files in the input folder are converted
-REM  automatically (checks every 3 seconds). Press Ctrl+C to stop.
+REM  automatically (checks every 1.5 seconds). Press Ctrl+C to stop.
 REM ---------------------------------------------------------------
 chcp 65001 >nul
 cd /d "%~dp0"

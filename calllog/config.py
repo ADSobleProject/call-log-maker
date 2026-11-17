@@ -20,7 +20,7 @@ DEFAULTS: dict[str, Any] = {
     "processed_dir": "processed",
     "archive_processed": True,
     "keep_raw_transcript": False,
-    "watch_interval_sec": 3,
+    "watch_interval_sec": 1.5,
     "max_keywords": 10,
     "max_summary_sentences": 5,
     "max_action_items": 8,
@@ -62,7 +62,7 @@ class Config:
     processed_dir: Path
     archive_processed: bool = True
     keep_raw_transcript: bool = False
-    watch_interval_sec: float = 3.0
+    watch_interval_sec: float = 1.5
     max_keywords: int = 10
     max_summary_sentences: int = 5
     max_action_items: int = 8
@@ -115,7 +115,7 @@ class Config:
             processed_dir=resolve(merged.get("processed_dir"), DEFAULTS["processed_dir"]),
             archive_processed=bool(merged.get("archive_processed", True)),
             keep_raw_transcript=bool(merged.get("keep_raw_transcript", False)),
-            watch_interval_sec=float(merged.get("watch_interval_sec", 3) or 3),
+            watch_interval_sec=float(merged.get("watch_interval_sec", 1.5) or 1.5),
             max_keywords=int(merged.get("max_keywords", 10) or 10),
             max_summary_sentences=int(merged.get("max_summary_sentences", 5) or 5),
             max_action_items=int(merged.get("max_action_items", 8) or 8),
