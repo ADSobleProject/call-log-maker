@@ -1,5 +1,6 @@
 # 실행 환경
 .venv/
+.venv.broken-*/
 __pycache__/
 *.py[cod]
 *.egg-info/

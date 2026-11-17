@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # macOS / Linux: convert only the files passed as arguments
-set -euo pipefail
+set -uo pipefail
 export PYTHONUNBUFFERED=1
 cd "$(dirname "$0")"
 
@@ -10,10 +10,8 @@ if [ "$#" -eq 0 ]; then
 fi
 
 PY="${PYTHON:-python3}"
-if [ ! -x ".venv/bin/python" ]; then
-  "$PY" -m venv .venv
-  ".venv/bin/python" -m pip install -r requirements.txt
-  touch .venv/.deps_ok
+if [ ! -x ".venv/bin/python" ] || [ ! -f ".venv/.deps_ok" ]; then
+  "$PY" setup_env.py || exit 1
 fi
 
 ".venv/bin/python" -m calllog files "$@"

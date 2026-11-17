@@ -14,8 +14,13 @@
 2. `input` 폴더에 녹음 파일(`.m4a` `.mp3` `.wav` `.ogg` `.flac`) 또는 텍스트(`.txt`)를 넣는다
 3. **`실행_통화록변환.bat`** 을 더블클릭한다 → `output` 폴더에 통화록이 생긴다
 
-> 첫 실행 때만 Python 환경과 필요한 패키지를 자동으로 설치합니다(인터넷 필요, 3~10분).
-> 그 다음부터는 인터넷 없이도 바로 변환됩니다.
+> **처음 한 번만** Python 환경과 필요한 패키지를 자동으로 준비합니다(인터넷 필요).
+> 준비는 두 단계로 나뉩니다.
+> - **필수 패키지**(`python-docx`) — `.txt` 통화록 변환에 필요. 금방 끝납니다.
+> - **선택 패키지**(`faster-whisper`) — 녹음 파일을 글자로 옮길 때 필요. 몇 분 걸립니다.
+>
+> 그래서 **녹음 파일 변환이 안 되는 PC라도 `.txt` 변환은 바로 됩니다.**
+> 준비가 끝나면 그 다음부터는 인터넷 없이도 변환됩니다.
 
 ---
 
@@ -43,6 +48,7 @@
 | **`실행_통화록변환.bat`** | `input` 폴더에 모아 둔 파일을 **한 번에 전부** 변환 |
 | **`드래그해서_변환.bat`** | 녹음 파일 1개(또는 여러 개)를 이 파일 **위로 끌어다 놓으면** 바로 변환 |
 | **`폴더감시_자동변환.bat`** | 켜 두면 `input` 폴더에 새 파일이 들어올 때마다 **3초 안에 자동 변환** (끄려면 창에서 `Ctrl+C`) |
+| **`설치_점검.bat`** | 설치가 잘 안 되거나 음성 변환이 안 될 때 — 환경을 점검하고 다시 설치를 시도 |
 
 변환이 끝나면 결과 폴더(`output`)가 자동으로 열립니다.
 
@@ -149,8 +155,11 @@
 
 ## 🛠️ 처음 실행할 때 알아둘 점
 
-- **Python 3.9 이상**이 필요합니다. 없으면 [python.org](https://www.python.org/downloads/windows/) 에서 설치하고,
-  설치 화면에서 **“Add python.exe to PATH”** 를 꼭 체크하세요. (`_setup.bat` 이 자동으로 찾아 씁니다)
+- **Python 3.12 (64비트)** 를 권장합니다. 없으면 `_setup.bat` 이 설치된 Python 을 찾아 쓰고,
+  음성 변환만 건너뛰고 `.txt` 변환으로 계속 진행합니다.
+  - 한 줄 설치: `winget install -e --id Python.Python.3.12`
+  - 또는 [python.org Windows 다운로드](https://www.python.org/downloads/windows/) 에서 **Windows installer (64-bit)** 3.12
+    (설치 화면에서 **“Add python.exe to PATH”** 체크)
 - 첫 실행 시 `.venv` 폴더가 생기고 패키지를 내려받습니다. 그 뒤로는 실행이 빠릅니다.
 - Windows SmartScreen 경고가 뜨면 **추가 정보 ▸ 실행**을 누르면 됩니다. (직접 받은 파일이라 안전)
 - 한 번에 많은 파일을 돌리면 시간이 걸립니다. 창을 닫지 말고 기다려 주세요.
@@ -158,15 +167,20 @@
 
 ### 문제가 생기면
 
+먼저 **`설치_점검.bat`** 을 실행해 보세요. 환경을 점검하고, `.venv` 가 깨졌으면 새로 만들고,
+음성 패키지 설치를 다시 시도한 뒤 결과를 보여 줍니다.
+
 | 증상 | 해결 |
 | --- | --- |
-| `Python 3 was not found` | Python 설치 후 새 창에서 다시 실행 (PATH 체크) |
-| Python 3.13 에서 설치 실패 | ctranslate2 wheel 이 아직 없을 수 있습니다. Python 3.11/3.12 를 설치해 다시 실행 |
-| 패키지 설치 실패 | 인터넷 확인 후 다시 실행. 수동: `.venv\Scripts\pip install faster-whisper python-docx` |
-| 음성 파일이 변환되지 않음 | `doctor` 로 점검: `.venv\Scripts\python -m calllog doctor` |
+| `Python was not found` | Python 설치 후 다시 실행. 한 줄: `winget install -e --id Python.Python.3.12` |
+| `faster-whisper ... depends on onnxruntime`, `no matching distributions available for your environment: onnxruntime` | **32비트 Python** 이면 음성 패키지가 없습니다. 64비트 Python 3.12 를 설치하고 `설치_점검.bat` 실행 |
+| `av-12.3.0.tar.gz` 를 빌드하다가 멈춤 / 오래 걸림 | 같은 이유(맞는 wheel 없음). 소스 빌드를 막아 두었으니 64비트 3.12 설치가 정답 |
+| Python 3.13/3.14 에서 설치 실패 | 이 버전용 wheel 이 아직 없을 수 있습니다. 64비트 3.12 를 함께 설치하면 `_setup.bat` 이 그것을 골라 씁니다 |
+| 음성 파일이 변환되지 않음 | 위 안내대로 64비트 Python 3.12 설치 → `설치_점검.bat` → `.venv\Scripts\python -m calllog doctor` 로 확인 |
+| `.txt` 는 되는데 음성만 안 됨 | 정상 동작입니다(선택 패키지 미설치). 그대로 `.txt` 를 쓰거나 위 방법으로 음성 변환을 켜면 됩니다 |
 | 받아쓰기가 부정확 | `config.json` 에서 `model` 을 `medium` 으로, 조용한 녹음 사용 |
 | 결과가 안 생김 | `input` 폴더 위치와 `config.json` 의 `input_dir` 가 같은지 확인 |
-| 패키지가 꼬임 | `.venv` 폴더를 지우고 다시 실행하면 새로 설치합니다 |
+| 패키지가 꼬임 | `설치_점검.bat` 실행. 그래도 안 되면 `.venv` 폴더를 지우고 다시 실행(자동 재설치) |
 
 ---
 
@@ -175,6 +189,7 @@
 ```
 calllog/
   cli.py         명령줄(batch / files / watch / doctor / demo)
+  compat.py      Python 버전·비트 판단, 음성 패키지 가능 여부, 안내 문구
   config.py      config.json 로드
   filenames.py   파일명 → 제목·일시
   parsers.py     txt 화자/타임스탬프 파싱
@@ -183,12 +198,17 @@ calllog/
   render.py      .md / .docx 생성
   pipeline.py    중복 방지·결과 저장·원본 이동
   watcher.py     폴더 감시
-tests/           68개 자동화 테스트
+setup_env.py     환경 준비(.venv 생성·복구, 필수→선택 패키지 순서 설치)
+requirements.txt        필수: python-docx
+requirements-audio.txt  선택: faster-whisper (음성 변환)
+tests/           122개 자동화 테스트
 samples/         예시 txt 3종
 ```
 
 ```bash
-python -m pip install -r requirements.txt
+python setup_env.py --check                 # 환경 상태만 확인(아무것도 바꾸지 않음)
+python setup_env.py --core-only             # .txt 변환용 패키지만 설치
+python setup_env.py --repair                # 음성 패키지 설치 다시 시도
 python -m unittest discover -s tests -t .   # 테스트
 python -m calllog demo                      # 샘플로 결과 미리보기
 python -m calllog doctor                    # 설치·설정 점검

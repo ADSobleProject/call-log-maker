@@ -36,6 +36,18 @@ class Transcriber(Protocol):
         ...
 
 
+def audio_engine_available() -> bool:
+    """음성 변환 엔진(faster-whisper)을 실제로 불러올 수 있는지.
+
+    설치가 깨져 DLL 로딩에서 실패하는 경우(OSError)까지 실패로 본다.
+    """
+    try:
+        import faster_whisper  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
 def _detect_device() -> str:
     try:
         import ctranslate2  # faster-whisper 의 의존성
@@ -87,10 +99,11 @@ class WhisperTranscriber:
             return self._models[key]
         try:
             from faster_whisper import WhisperModel
-        except ImportError as exc:  # pragma: no cover - 설치 안내용
+        except Exception as exc:  # 설치 안 됨 / 깨진 설치 (안내용)
             raise TranscriptionError(
-                "faster-whisper 가 설치되어 있지 않습니다. '실행_통화록변환.bat' 을 다시 실행하면 "
-                "자동으로 설치됩니다. (수동 설치: pip install faster-whisper)"
+                "음성 변환 패키지(faster-whisper)가 설치되어 있지 않습니다. "
+                ".txt 통화록 변환은 그대로 됩니다. 음성 파일도 변환하려면 '설치_점검.bat' 을 실행하세요. "
+                f"(원인: {type(exc).__name__}: {exc})"
             ) from exc
         model_size, device, compute = key
         try:

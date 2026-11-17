@@ -5,10 +5,8 @@ export PYTHONUNBUFFERED=1
 cd "$(dirname "$0")"
 
 PY="${PYTHON:-python3}"
-if [ ! -x ".venv/bin/python" ]; then
-  "$PY" -m venv .venv
-  ".venv/bin/python" -m pip install -r requirements.txt
-  touch .venv/.deps_ok
+if [ ! -x ".venv/bin/python" ] || [ ! -f ".venv/.deps_ok" ]; then
+  "$PY" setup_env.py
 fi
 
 exec ".venv/bin/python" -m calllog watch

@@ -13,8 +13,10 @@ import os
 import sys
 from pathlib import Path
 
+from . import compat
 from .config import PROJECT_ROOT, Config
 from .pipeline import ProcessedRegistry, Processor, summarize_results
+from .transcribe import audio_engine_available
 from .watcher import FolderWatcher
 
 
@@ -33,6 +35,8 @@ def _print_header(cfg: Config) -> None:
     print(cfg.describe())
     for warning in cfg.warnings:
         print(f"  ! {warning}")
+    if not audio_engine_available():
+        print("  · 음성 파일 변환: 설치 안 됨 → 지금은 .txt 만 변환됩니다 ('설치_점검.bat' 참고)")
     print("-" * 58)
 
 
@@ -103,28 +107,34 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     cfg = _load(args)
     _print_header(cfg)
     ok = True
+    here = compat.current_interpreter()
 
     print("\n[점검]")
-    print(f"  · Python {sys.version.split()[0]}")
-    if sys.version_info < (3, 9):
-        print("    ✗ Python 3.9 이상이 필요합니다.")
+    print(f"  · 이 프로그램을 돌리는 Python: {here.version_text} ({here.bits_text})")
+    if tuple(here.version) < compat.MIN_PYTHON:
+        print(f"    ✗ Python {compat.MIN_PYTHON[0]}.{compat.MIN_PYTHON[1]} 이상이 필요합니다.")
         ok = False
 
     try:
         import docx  # noqa: F401
 
-        print("  · python-docx: 설치됨")
-    except ImportError:
-        print("    ✗ python-docx 가 없습니다. (pip install python-docx)")
+        print("  · python-docx: 설치됨 (.md/.docx 결과물 만들기 가능)")
+    except Exception as exc:  # 설치 안 됨 또는 깨짐
+        print(f"    ✗ python-docx 를 불러오지 못했습니다({type(exc).__name__}) → '설치_점검.bat' 을 실행하세요.")
         ok = False
 
-    try:
-        import faster_whisper  # noqa: F401
-
-        print("  · faster-whisper: 설치됨 (음성 파일 변환 가능)")
-    except ImportError:
-        print("    ! faster-whisper 가 없습니다. → .txt 변환은 되지만 음성 파일은 변환되지 않습니다.")
-        print("      설치: pip install faster-whisper")
+    if audio_engine_available():
+        model = cfg.transcribe.get("model", "small")
+        print(f"  · faster-whisper: 설치됨 (음성 파일 변환 가능, 모델 {model})")
+        print("    모델 파일은 첫 변환 때 한 번만 받고, 그 뒤로는 오프라인으로 씁니다.")
+    else:
+        print("    ! faster-whisper 가 없습니다 → .txt 변환은 되지만 음성 파일은 변환되지 않습니다.")
+        if not compat.is_audio_ready(here.version, here.bits):
+            print(f"      이유: {compat.describe_audio_problem(here)}")
+        print("")
+        for line in compat.audio_help_lines(here):
+            print("    " + line)
+        print("")
 
     for label, path in (("입력", cfg.input_dir), ("결과", cfg.output_dir), ("완료", cfg.processed_dir)):
         state = "있음" if path.exists() else "없음(자동 생성)"
@@ -132,13 +142,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     samples = list(cfg.input_dir.glob("*")) if cfg.input_dir.exists() else []
     print(f"  · 대기 중인 파일: {len([p for p in samples if p.is_file() and not p.name.startswith('.')])}개")
-    try:
-        import faster_whisper  # noqa: F401
-
-        model = cfg.transcribe.get("model", "small")
-        print(f"  · 전사 모델: {model} (첫 실행 때 자동 다운로드, 이후 오프라인 사용)")
-    except ImportError:
-        pass
+    print("  · 더 자세한 환경 점검: python setup_env.py --check")
     print("\n결과: " + ("사용 가능 ✅" if ok else "설치를 확인해 주세요 ⚠️"))
     return 0 if ok else 1
 

@@ -7,9 +7,15 @@ chcp 65001 >nul
 cd /d "%~dp0"
 set PYTHONUNBUFFERED=1
 
+if not exist ".venv\Scripts\python.exe" goto :setup
+if not exist ".venv\.deps_ok" goto :setup
+goto :run
+
+:setup
 call "%~dp0_setup.bat"
 if errorlevel 1 goto :end
 
+:run
 echo.
 ".venv\Scripts\python.exe" -m calllog watch
 echo.
@@ -18,5 +24,6 @@ exit /b 0
 
 :end
 echo.
+echo Setup did not finish. Read the messages above.
 pause
 exit /b 1

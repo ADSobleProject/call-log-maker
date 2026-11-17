@@ -15,9 +15,15 @@ if "%~1"=="" (
   exit /b 1
 )
 
+if not exist ".venv\Scripts\python.exe" goto :setup
+if not exist ".venv\.deps_ok" goto :setup
+goto :run
+
+:setup
 call "%~dp0_setup.bat"
 if errorlevel 1 goto :end
 
+:run
 echo.
 ".venv\Scripts\python.exe" -m calllog files %*
 set "RC=%ERRORLEVEL%"
@@ -29,5 +35,6 @@ exit /b %RC%
 
 :end
 echo.
+echo Setup did not finish. Read the messages above.
 pause
 exit /b 1

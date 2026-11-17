@@ -1,60 +1,35 @@
 @echo off
 REM ---------------------------------------------------------------
-REM  call-log-maker - one-time environment setup (ASCII only)
-REM  Creates .venv and installs required packages on first run.
+REM  call-log-maker - environment setup (ASCII only)
+REM  Finds a Python here, then hands the real work to setup_env.py:
+REM    - creates (or repairs) .venv
+REM    - installs required packages (python-docx) first
+REM    - tries the optional audio packages (faster-whisper) separately
+REM  Options are passed through: _setup.bat --repair / --core-only / --check
 REM ---------------------------------------------------------------
 setlocal
 chcp 65001 >nul
 cd /d "%~dp0"
 
-set "PYEXE="
-py -3 --version >nul 2>nul && set "PYEXE=py -3"
-if not defined PYEXE (
-  python --version >nul 2>nul && set "PYEXE=python"
+set "BOOT="
+py -3 --version >nul 2>nul && set "BOOT=py -3"
+if not defined BOOT (
+  python -c "import sys" >nul 2>nul && set "BOOT=python"
 )
-if not defined PYEXE (
-  echo.
-  echo [ERROR] Python 3 was not found.
-  echo         Install Python 3.9 or newer from https://www.python.org/downloads/windows/
-  echo         During installation, tick "Add python.exe to PATH".
-  echo.
-  exit /b 1
+if not defined BOOT (
+  python3 -c "import sys" >nul 2>nul && set "BOOT=python3"
 )
-
-%PYEXE% -c "import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)"
-if errorlevel 1 (
+if not defined BOOT (
   echo.
-  echo [ERROR] Python 3.9 or newer is required.
+  echo [ERROR] Python was not found on this PC.
+  echo         Install 64-bit Python 3.12, then run this file again:
+  echo             winget install -e --id Python.Python.3.12
+  echo         Or get "Windows installer (64-bit)" 3.12 from
+  echo             https://www.python.org/downloads/windows/
+  echo         Tick "Add python.exe to PATH" during installation.
   echo.
   exit /b 1
 )
 
-if not exist ".venv\Scripts\python.exe" (
-  echo [1/3] Creating the Python environment in .venv ...
-  %PYEXE% -m venv .venv
-  if errorlevel 1 (
-    echo [ERROR] Could not create .venv
-    exit /b 1
-  )
-)
-
-set "VPY=.venv\Scripts\python.exe"
-
-if not exist ".venv\.deps_ok" (
-  echo [2/3] Installing required packages. This can take a few minutes on the first run...
-  "%VPY%" -m pip install --upgrade pip
-  "%VPY%" -m pip install -r requirements.txt
-  if errorlevel 1 (
-    echo.
-    echo [ERROR] Package installation failed. Check your internet connection and try again.
-    echo         Manual: .venv\Scripts\pip install faster-whisper python-docx
-    echo.
-    exit /b 1
-  )
-  echo ok> ".venv\.deps_ok"
-) else (
-  echo [2/3] Packages already installed.
-)
-
-echo [3/3] Ready.
-exit /b 0
+%BOOT% "%~dp0setup_env.py" %*
+exit /b %ERRORLEVEL%
