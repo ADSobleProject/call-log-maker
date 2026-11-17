@@ -3,3 +3,14 @@
 # 64비트 Python 3.10~3.12 에서 가장 잘 설치됩니다.
 -r requirements.txt
 faster-whisper>=1.1.0,<2
+
+# 오디오 디코딩 라이브러리(PyAV).
+# faster-whisper 는 내부에서 av.open(..., metadata_errors="ignore") 로 소리를 읽는데,
+# PyAV 19.0.0(2026-09)에서 그 인자가 없어져 av 19 이상이 깔리면 음성 파일 변환이
+#   음성 파일을 읽지 못했습니다: open() got an unexpected keyword argument 'metadata_errors'
+# 로 실패한다. 그래서 19 미만으로 막는다.
+#   · av 12~18 은 실제 .m4a 디코딩이 되는 것을 확인함 (12.3.0 / 16.1.0 / 18.1.0)
+#   · 12.0 미만(11.0.0)은 Windows wheel 이 없어 소스 빌드로 넘어가므로 12 이상
+#   · Windows 64비트 wheel: 3.9~3.14 모두 이 범위 안에 있다
+#     (3.9 → 15.1.0, 3.10 → 17.1.0, 3.11~3.14 → 18.1.0) — pip download 로 직접 확인함
+av>=12,<19

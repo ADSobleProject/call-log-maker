@@ -131,6 +131,50 @@ class PipFailureTest(unittest.TestCase):
         self.assertEqual(len(compat.summarize_pip_failure(text, limit=3)), 3)
 
 
+class AudioProbeTest(unittest.TestCase):
+    """음성 변환 점검 결과 해석 (av 19 에서 metadata_errors 인자가 없어진 문제)."""
+
+    def test_ok_when_both_parts_are_fine(self):
+        probe = compat.parse_audio_probe(0, '{"faster_whisper": true, "av": "18.1.0", "av_open_ok": true, "error": ""}')
+        self.assertTrue(probe.ok)
+        self.assertFalse(probe.broken_av)
+        self.assertEqual(probe.av_version, "18.1.0")
+        self.assertEqual(compat.audio_probe_problem(probe), "")
+
+    def test_broken_av_is_detected(self):
+        probe = compat.parse_audio_probe(
+            4, '{"faster_whisper": true, "av": "19.0.2", "av_open_ok": false, "error": "av 19.0.2 has no metadata_errors"}'
+        )
+        self.assertFalse(probe.ok)
+        self.assertTrue(probe.broken_av)
+        problem = compat.audio_probe_problem(probe)
+        self.assertIn("av 19.0.2", problem)
+        self.assertIn("metadata_errors", problem)
+
+    def test_missing_package_is_detected(self):
+        probe = compat.parse_audio_probe(3, '{"faster_whisper": false, "av": "", "av_open_ok": false, "error": "ModuleNotFoundError: no"}')
+        self.assertFalse(probe.ok)
+        self.assertFalse(probe.broken_av)
+        self.assertIn("설치되어 있지 않습니다", compat.audio_probe_problem(probe))
+
+    def test_json_after_other_output_is_found(self):
+        output = "UserWarning: symlink ...\n{\"faster_whisper\": true, \"av\": \"16.1.0\", \"av_open_ok\": true}\n"
+        probe = compat.parse_audio_probe(0, output)
+        self.assertTrue(probe.ok)
+        self.assertEqual(probe.av_version, "16.1.0")
+
+    def test_unreadable_output_falls_back_to_exit_code(self):
+        self.assertTrue(compat.parse_audio_probe(0, "").ok)
+        failed = compat.parse_audio_probe(1, "Traceback ... TypeError: open() got an unexpected keyword argument 'metadata_errors'")
+        self.assertFalse(failed.ok)
+        self.assertIn("metadata_errors", failed.error)
+
+    def test_probe_code_runs_without_imports_at_hand(self):
+        # 점검 스크립트는 .venv 안에서 단독으로 돌아야 하므로 ASCII 만 쓴다
+        self.assertTrue(compat.AUDIO_PROBE_CODE.isascii())
+        self.assertIn("metadata_errors", compat.AUDIO_PROBE_CODE)
+
+
 class InterpreterTableTest(unittest.TestCase):
     def test_table_is_empty_without_interpreters(self):
         self.assertEqual(compat.interpreter_table([]), [])

@@ -16,7 +16,7 @@ from pathlib import Path
 from . import compat
 from .config import PROJECT_ROOT, Config
 from .pipeline import ProcessedRegistry, Processor, summarize_results
-from .transcribe import audio_engine_available
+from .transcribe import audio_engine_available, audio_engine_problem, audio_engine_versions
 from .watcher import FolderWatcher
 
 
@@ -36,7 +36,8 @@ def _print_header(cfg: Config) -> None:
     for warning in cfg.warnings:
         print(f"  ! {warning}")
     if not audio_engine_available():
-        print("  · 음성 파일 변환: 설치 안 됨 → 지금은 .txt 만 변환됩니다 ('설치_점검.bat' 참고)")
+        print(f"  · 음성 파일 변환: 사용 안 함 — {audio_engine_problem()}")
+        print("    .txt 통화록 변환은 그대로 됩니다.")
     print("-" * 58)
 
 
@@ -125,16 +126,20 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     if audio_engine_available():
         model = cfg.transcribe.get("model", "small")
+        versions = audio_engine_versions()
+        shown = ", ".join(f"{name} {ver}" for name, ver in versions.items())
         print(f"  · faster-whisper: 설치됨 (음성 파일 변환 가능, 모델 {model})")
+        if shown:
+            print(f"    버전: {shown}")
         print("    모델 파일은 첫 변환 때 한 번만 받고, 그 뒤로는 오프라인으로 씁니다.")
     else:
-        print("    ! faster-whisper 가 없습니다 → .txt 변환은 되지만 음성 파일은 변환되지 않습니다.")
+        print(f"    ! {audio_engine_problem()}")
         if not compat.is_audio_ready(here.version, here.bits):
             print(f"      이유: {compat.describe_audio_problem(here)}")
-        print("")
-        for line in compat.audio_help_lines(here):
-            print("    " + line)
-        print("")
+            print("")
+            for line in compat.audio_help_lines(here):
+                print("    " + line)
+            print("")
 
     for label, path in (("입력", cfg.input_dir), ("결과", cfg.output_dir), ("완료", cfg.processed_dir)):
         state = "있음" if path.exists() else "없음(자동 생성)"

@@ -175,11 +175,18 @@
 **64비트 Python 3.12 를 지금 설치할지 물어보고**, 설치하면 그 Python 으로 다시 준비합니다.
 원하지 않으면 `n` 을 누르면 되고, `.txt` 변환은 그대로 됩니다.
 
+음성 패키지는 **설치된 상태인데도** `.m4a` 를 읽지 못하는 경우가 있습니다(아래 `metadata_errors` 줄).
+이때는 `설치_점검.bat` 이 오디오 라이브러리(`av`) 버전만 맞는 것으로 바꿔 줍니다.
+예전 버전으로 설치해 둔 폴더라면, **`실행_통화록변환.bat` 을 한 번 실행할 때 자동으로 점검·복구**하고
+그 다음부터는 원래처럼 빠르게 시작합니다.
+
 | 증상 | 해결 |
 | --- | --- |
 | `Python was not found` | Python 설치 후 다시 실행. 한 줄: `winget install -e --id Python.Python.3.12` |
 | `faster-whisper ... depends on onnxruntime`, `no matching distributions available for your environment: onnxruntime` | **32비트 Python** 이면 음성 패키지가 없습니다. 64비트 Python 3.12 를 설치하고 `설치_점검.bat` 실행 |
 | `av-12.3.0.tar.gz` 를 빌드하다가 멈춤 / 오래 걸림 | 같은 이유(맞는 wheel 없음). 소스 빌드를 막아 두었으니 64비트 3.12 설치가 정답 |
+| `음성 파일을 읽지 못했습니다: open() got an unexpected keyword argument 'metadata_errors'` | 오디오 라이브러리(`av`)가 **19 이상**으로 깔려 생기는 문제입니다(PyAV 19 에서 `metadata_errors` 인자가 없어짐). `설치_점검.bat` 을 실행하면 `av<19` 로 자동 교체됩니다. 직접 하려면 `.venv\Scripts\python -m pip install --upgrade "av>=12,<19"` |
+| `huggingface_hub` symlink `UserWarning` 이 길게 출력 | 모델을 처음 받을 때만 나오는 Windows 안내입니다. 이 프로그램은 `HF_HUB_DISABLE_SYMLINKS_WARNING=1` 로 꺼 두었고, 혹시 보이면 무시해도 됩니다 |
 | Python 3.13/3.14 에서 설치 실패 | 이 버전용 wheel 이 아직 없을 수 있습니다. 64비트 3.12 를 함께 설치한 뒤 `설치_점검.bat` 을 실행하면 3.12 로 맞춰 다시 준비합니다 |
 | 음성 파일이 변환되지 않음 | 위 안내대로 64비트 Python 3.12 설치 → `설치_점검.bat` → `.venv\Scripts\python -m calllog doctor` 로 확인 |
 | `.txt` 는 되는데 음성만 안 됨 | 정상 동작입니다(선택 패키지 미설치). 그대로 `.txt` 를 쓰거나 위 방법으로 음성 변환을 켜면 됩니다 |
@@ -205,8 +212,8 @@ calllog/
   watcher.py     폴더 감시
 setup_env.py     환경 준비(.venv 생성·복구, 필수→선택 패키지 순서 설치)
 requirements.txt        필수: python-docx
-requirements-audio.txt  선택: faster-whisper (음성 변환)
-tests/           122개 자동화 테스트
+requirements-audio.txt  선택: faster-whisper + av<19 (음성 변환, PyAV 19 는 faster-whisper 와 비호환)
+tests/           147개 자동화 테스트
 samples/         예시 txt 3종
 ```
 

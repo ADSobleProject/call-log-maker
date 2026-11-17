@@ -6,9 +6,16 @@ REM ---------------------------------------------------------------
 chcp 65001 >nul
 cd /d "%~dp0"
 set PYTHONUNBUFFERED=1
+REM Hide the noisy huggingface_hub symlink warning on Windows.
+set HF_HUB_DISABLE_SYMLINKS_WARNING=1
 
 if not exist ".venv\Scripts\python.exe" goto :setup
 if not exist ".venv\.deps_ok" goto :setup
+REM Audio packages installed by an older version: verify once (fixes a
+REM mismatched audio library such as av 19) and then stay fast.
+if not exist ".venv\.audio_ok" goto :run
+findstr /C:"probe" ".venv\.audio_ok" >nul 2>nul
+if errorlevel 1 goto :setup
 goto :run
 
 :setup

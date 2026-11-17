@@ -371,10 +371,22 @@ class Setup:
         return True
 
     # -------------------------------------------------------------- 음성 패키지
-    def check_audio_import(self) -> bool:
+    def probe_audio(self) -> compat.AudioProbe:
+        """이 .venv 에서 음성 변환이 실제로 되는지 확인한다.
+
+        `import faster_whisper` 만 보면 av 버전이 faster-whisper 와 맞지 않아도 통과해 버린다
+        (PyAV 19 부터 av.open 의 metadata_errors 인자가 없어져 .m4a 디코딩에서 실패).
+        그래서 .venv 안에서 av.open 을 그 인자로 직접 불러 보고, 짧은 wav 를
+        decode_audio 로 디코딩해 보기까지 한다.
+        """
         if not self.venv_python.exists():
-            return False
-        return self._run([str(self.venv_python), "-c", "import faster_whisper"], timeout=180).ok
+            return compat.AudioProbe()
+        result = self._run([str(self.venv_python), "-c", compat.AUDIO_PROBE_CODE], timeout=180)
+        return compat.parse_audio_probe(result.code, result.out)
+
+    def check_audio_runtime(self) -> bool:
+        """음성 변환 패키지가 지금 상태로 쓸 수 있는가."""
+        return self.probe_audio().ok
 
     def write_skip(self, reason: str, detail: str = "") -> None:
         payload = {
@@ -396,11 +408,21 @@ class Setup:
             except OSError:
                 pass
 
-    def mark_audio_ok(self) -> None:
+    def mark_audio_ok(self, av_version: str = "") -> None:
         self.clear_skip()
         try:
             self.audio_ok.write_text(
-                json.dumps({"ready_at": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False),
+                json.dumps(
+                    {
+                        "ready_at": datetime.now().isoformat(timespec="seconds"),
+                        # 이 표시가 없으면(옛 설치) 실행 .bat 이 '설치_점검' 을 한 번 돌려
+                        # av 버전까지 확인해 준다.
+                        "probe": True,
+                        "av": av_version,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
                 encoding="utf-8",
             )
         except OSError:
@@ -425,10 +447,19 @@ class Setup:
         if state is None:
             return "failed"
 
-        if self.check_audio_import():
-            self.mark_audio_ok()
-            self.log("  · 음성 변환: 사용 가능 (faster-whisper 설치됨)")
+        probe = self.probe_audio()
+        if probe.ok:
+            self.mark_audio_ok(probe.av_version)
+            av = f", av {probe.av_version}" if probe.av_version else ""
+            self.log(f"  · 음성 변환: 사용 가능 (faster-whisper{av} 설치됨)")
             return "present"
+
+        # 패키지는 다 깔려 있는데 오디오 라이브러리(av)만 faster-whisper 와 안 맞는 경우
+        # (예: av 19 이상이 함께 깔려 .m4a 를 읽지 못함) → 버전만 바로잡아 다시 설치한다.
+        if probe.broken_av:
+            self.log(f"  ! {compat.audio_probe_problem(probe)}")
+            self.log("  · 맞는 버전(av<19)으로 다시 설치합니다 ...")
+            force = True
 
         if not compat.is_audio_ready(state.version, state.bits):
             if force or not self.audio_skip.exists():
@@ -446,13 +477,18 @@ class Setup:
             return "skipped"
 
         vpy = str(self.venv_python)
-        self.log("  · 음성 변환 패키지(faster-whisper) 설치 중 ... 처음 한 번만, 몇 분 걸릴 수 있습니다")
+        if probe.faster_whisper:
+            self.log("  · 음성 변환 패키지의 오디오 라이브러리를 맞는 버전으로 교체합니다 ...")
+        else:
+            self.log("  · 음성 변환 패키지(faster-whisper) 설치 중 ... 처음 한 번만, 몇 분 걸릴 수 있습니다")
         result = self._run(
             [
                 vpy,
                 "-m",
                 "pip",
                 "install",
+                # 이미 깔린 av 가 요구 버전(av<19)을 벗어나 있으면 이 옵션이 있어야 교체된다
+                "--upgrade",
                 # 소스를 받아 직접 빌드하지 않고, 미리 만들어진 wheel 만 쓴다
                 # (av-*.tar.gz 빌드 시도로 몇십 분씩 걸리는 일을 막는다)
                 "--only-binary=:all:",
@@ -463,10 +499,16 @@ class Setup:
             ],
             timeout=3600,
         )
-        if result.ok and self.check_audio_import():
-            self.mark_audio_ok()
+        after = self.probe_audio()
+        if result.ok and after.ok:
+            self.mark_audio_ok(after.av_version)
             self.log("  ✓ 음성 변환 준비 완료 — 녹음 파일(.m4a/.mp3/...)도 변환됩니다.")
             return "installed"
+
+        if result.ok and not after.ok:
+            # 설치 명령은 성공했는데 실제 점검이 실패한 경우(드묾) — 이유를 그대로 보여 준다
+            self.log("  ! 음성 패키지는 설치되었지만 점검을 통과하지 못했습니다.")
+            self.log("    " + compat.audio_probe_problem(after))
 
         detail = compat.summarize_pip_failure(result.out)
         packages = compat.missing_packages(result.out)
@@ -500,9 +542,17 @@ class Setup:
         best = self.best()
         lines.append(f"  · 쓸 수 있는 Python 중 최적: {best.describe() if best else '없음(3.9 이상 필요)'}")
         lines.append(f"  · 필수 패키지(python-docx): {'설치됨' if self.deps_ok.exists() else '미설치'}")
-        audio = self.check_audio_import()
-        lines.append(f"  · 음성 변환(faster-whisper): {'사용 가능' if audio else '미설치 — .txt 만 변환됩니다'}")
-        if not audio and state is not None:
+        probe = self.probe_audio()
+        if probe.ok:
+            av = f" (av {probe.av_version})" if probe.av_version else ""
+            lines.append(f"  · 음성 변환(faster-whisper): 사용 가능{av}")
+            return lines
+        lines.append("  · 음성 변환(faster-whisper): 미설치 — .txt 만 변환됩니다")
+        if probe.broken_av:
+            lines[-1] = "  · 음성 변환(faster-whisper): 지금은 쓸 수 없습니다 — .txt 만 변환됩니다"
+            lines.append(f"    ! {compat.audio_probe_problem(probe)}")
+            lines.append("    → '설치_점검.bat' 을 실행하면 맞는 버전으로 자동으로 고칩니다.")
+        elif state is not None:
             lines.extend(["", *compat.audio_help_lines(state)])
         return lines
 

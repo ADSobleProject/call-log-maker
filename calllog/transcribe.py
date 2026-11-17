@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+from . import compat
 from .parsers import Segment
 
 
@@ -37,15 +38,46 @@ class Transcriber(Protocol):
 
 
 def audio_engine_available() -> bool:
-    """음성 변환 엔진(faster-whisper)을 실제로 불러올 수 있는지.
+    """음성 변환 엔진(faster-whisper)을 실제로 쓸 수 있는지.
 
     설치가 깨져 DLL 로딩에서 실패하는 경우(OSError)까지 실패로 본다.
+    av 버전이 faster-whisper 와 맞지 않아 디코딩이 안 되는 경우도 실패로 본다.
     """
     try:
         import faster_whisper  # noqa: F401
     except Exception:
         return False
-    return True
+    return not _av_open_problem()
+
+
+def _av_open_problem() -> str:
+    """faster-whisper 가 쓰는 `av.open(..., metadata_errors=...)` 가 되는지(안 되면 이유)."""
+    problem = compat.av_open_problem()
+    if problem and "metadata_errors" in problem:
+        return problem + " — '설치_점검.bat' 을 실행하면 맞는 버전(av<19)으로 자동으로 고칩니다."
+    return problem
+
+
+def audio_engine_problem() -> str:
+    """음성 변환이 안 되는 이유(될 수 있으면 빈 문자열)."""
+    try:
+        import faster_whisper  # noqa: F401
+    except Exception as exc:
+        return f"faster-whisper 패키지가 설치되어 있지 않습니다 ({type(exc).__name__})"
+    return _av_open_problem()
+
+
+def audio_engine_versions() -> dict[str, str]:
+    """설치된 음성 패키지 버전(점검 화면용)."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    versions: dict[str, str] = {}
+    for name in ("faster-whisper", "av"):
+        try:
+            versions[name] = version(name)
+        except PackageNotFoundError:
+            continue
+    return versions
 
 
 def _detect_device() -> str:
@@ -135,7 +167,13 @@ class WhisperTranscriber:
                 condition_on_previous_text=False,
             )
         except Exception as exc:
-            raise TranscriptionError(f"음성 파일을 읽지 못했습니다: {exc}") from exc
+            hint = ""
+            if "metadata_errors" in str(exc):
+                hint = (
+                    " (오디오 라이브러리(av) 버전이 faster-whisper 와 맞지 않는 것이 원인입니다. "
+                    "'설치_점검.bat' 을 실행하면 맞는 버전(av<19)으로 자동으로 고칩니다)"
+                )
+            raise TranscriptionError(f"음성 파일을 읽지 못했습니다: {exc}{hint}") from exc
 
         warnings: list[str] = []
         segments: list[Segment] = []

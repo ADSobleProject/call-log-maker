@@ -220,3 +220,167 @@ def interpreter_table(interpreters: Sequence[Interpreter]) -> list[str]:
     if not interpreters:
         return []
     return [f"  · {item.describe()}" for item in dedupe(interpreters)]
+
+
+# ---------------------------------------------------------------- 음성 변환 점검
+# faster-whisper 는 소리를 읽을 때 `av.open(..., metadata_errors="ignore")` 를 쓴다.
+# 그런데 PyAV 19.0.0 에서 이 인자가 없어졌다(2026-09). 그래서 av 19 이상이 같이 깔리면
+#   음성 파일을 읽지 못했습니다: open() got an unexpected keyword argument 'metadata_errors'
+# 로 실패한다. requirements-audio.txt 에서 av<19 로 막고 있고, 여기서는 '이미 깔려 있는
+# .venv' 도 같은 상태인지 직접 확인한다(import 만 보면 av 가 틀려도 통과해 버린다).
+AUDIO_AV_MAX = 19  # 이 주 버전부터는 faster-whisper 와 맞지 않는다 (av>=12,<19)
+
+# .venv 안에서 돌리는 점검 스크립트 — 결과를 JSON 한 줄로 돌려준다(ASCII 만 쓴다).
+#   종료 코드 0 = 음성 변환 가능, 3 = faster-whisper 없음, 4 = av 가 맞지 않거나 디코딩 실패
+#   av.open 의 '서명'은 C 로 만든 버전(18.x)에서는 읽을 수 없어서, 실제로 그 인자를 넣어
+#   한 번 불러 보고(오류 종류로 판단) 짧은 wav 를 decode_audio 로 직접 디코딩해 확인한다.
+AUDIO_PROBE_CODE = (
+    "import json, os, sys\n"
+    "info = {'faster_whisper': False, 'av': '', 'av_open_ok': False, 'decode_ok': False, 'error': ''}\n"
+    "try:\n"
+    "    import faster_whisper\n"
+    "    info['faster_whisper'] = True\n"
+    "except Exception as exc:\n"
+    "    info['error'] = type(exc).__name__ + ': ' + str(exc)[:160]\n"
+    "    print(json.dumps(info))\n"
+    "    sys.exit(3)\n"
+    "try:\n"
+    "    import av\n"
+    "    info['av'] = str(getattr(av, '__version__', '') or '')\n"
+    "    try:\n"
+    "        av.open(os.devnull, mode='r', metadata_errors='ignore')\n"
+    "        info['av_open_ok'] = True\n"
+    "    except TypeError as exc:\n"
+    "        info['av_open_ok'] = 'metadata_errors' not in str(exc)\n"
+    "        if not info['av_open_ok']:\n"
+    "            info['error'] = 'metadata_errors: ' + str(exc)[:120]\n"
+    "    except Exception:\n"
+    "        info['av_open_ok'] = True\n"
+    "except Exception as exc:\n"
+    "    info['error'] = type(exc).__name__ + ': ' + str(exc)[:160]\n"
+    "if info['av_open_ok']:\n"
+    "    try:\n"
+    "        import array, tempfile, wave\n"
+    "        from faster_whisper.audio import decode_audio\n"
+    "        path = os.path.join(tempfile.gettempdir(), 'calllog_probe.wav')\n"
+    "        with wave.open(path, 'wb') as handle:\n"
+    "            handle.setnchannels(1)\n"
+    "            handle.setsampwidth(2)\n"
+    "            handle.setframerate(16000)\n"
+    "            handle.writeframes(array.array('h', [0] * 3200).tobytes())\n"
+    "        decode_audio(path)\n"
+    "        info['decode_ok'] = True\n"
+    "    except Exception as exc:\n"
+    "        info['decode_ok'] = False\n"
+    "        if not info['error']:\n"
+    "            info['error'] = type(exc).__name__ + ': ' + str(exc)[:160]\n"
+    "print(json.dumps(info))\n"
+    "sys.exit(0 if (info['faster_whisper'] and info['av_open_ok'] and info['decode_ok']) else 4)\n"
+)
+
+
+@dataclass(frozen=True)
+class AudioProbe:
+    """음성 변환 패키지의 지금 상태(점검 결과)."""
+
+    faster_whisper: bool = False
+    av_version: str = ""
+    av_open_ok: bool = False
+    decode_ok: bool = False
+    error: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return self.faster_whisper and self.av_open_ok and self.decode_ok
+
+    @property
+    def broken_av(self) -> bool:
+        """패키지는 다 있는데 오디오 라이브러리(av)만 맞지 않는 상태 — 버전만 고치면 된다."""
+        return self.faster_whisper and not self.av_open_ok
+
+
+def _last_json_object(output: str) -> dict | None:
+    """점검 스크립트가 마지막에 찍은 JSON 한 줄을 읽는다."""
+    import json
+
+    for raw in reversed((output or "").splitlines()):
+        line = raw.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return None
+
+
+def parse_audio_probe(code: int, output: str) -> AudioProbe:
+    """점검 스크립트의 (종료 코드, 출력)을 AudioProbe 로."""
+    data = _last_json_object(output)
+    if data is not None:
+        av_open = bool(data.get("av_open_ok"))
+        return AudioProbe(
+            faster_whisper=bool(data.get("faster_whisper")),
+            av_version=str(data.get("av") or ""),
+            av_open_ok=av_open,
+            # av_open_ok 만 알려 주는 옛 형식이면 디코딩도 된 것으로 본다
+            decode_ok=bool(data.get("decode_ok", av_open)),
+            error=str(data.get("error") or ""),
+        )
+    # 출력을 못 읽었으면 종료 코드로만 판단한다(0 = 점검 통과).
+    usable = code == 0
+    return AudioProbe(
+        faster_whisper=usable,
+        av_open_ok=usable,
+        decode_ok=usable,
+        error="" if usable else (output or "").strip()[-300:],
+    )
+
+
+def av_mismatch_message(version: str | None = None) -> str:
+    """av 와 faster-whisper 가 맞지 않을 때 쓰는 한 줄 설명."""
+    return (
+        f"오디오 라이브러리(av {version or '?'})가 faster-whisper 와 맞지 않습니다 "
+        f"(PyAV {AUDIO_AV_MAX} 부터 metadata_errors 인자가 없어져 음성 파일을 읽을 수 없음)"
+    )
+
+
+def av_open_problem() -> str:
+    """지금 불러온 av 로 `av.open(..., metadata_errors=...)` 가 되는지(안 되면 이유).
+
+    av.open 은 버전에 따라 C 함수라 inspect.signature 로는 알 수 없다.
+    그래서 실제로 그 인자를 넣어 한 번 불러 보고, TypeError 인지로 판단한다.
+    """
+    import os
+
+    try:
+        import av
+    except Exception as exc:
+        return f"오디오 라이브러리(av)를 불러오지 못했습니다: {type(exc).__name__}: {exc}"
+    accepted = True
+    try:
+        av.open(os.devnull, mode="r", metadata_errors="ignore")
+    except TypeError as exc:
+        accepted = "metadata_errors" not in str(exc)
+    except Exception:  # 빈 파일이라 열 수 없다는 오류 — 인자 자체는 받아들여졌다
+        accepted = True
+    if accepted:
+        return ""
+    return av_mismatch_message(getattr(av, "__version__", "") or "")
+
+
+def audio_probe_problem(probe: AudioProbe) -> str:
+    """음성 변환이 안 되는 이유 한 줄(되는 상태면 빈 문자열)."""
+    if probe.ok:
+        return ""
+    if not probe.faster_whisper:
+        detail = f" ({probe.error})" if probe.error else ""
+        return f"faster-whisper 패키지가 설치되어 있지 않습니다{detail}"
+    if not probe.av_open_ok:
+        return av_mismatch_message(probe.av_version)
+    if not probe.decode_ok:
+        detail = f" ({probe.error})" if probe.error else ""
+        return f"오디오 디코딩 점검에 실패했습니다{detail}"
+    return probe.error or "음성 변환 점검을 통과하지 못했습니다"

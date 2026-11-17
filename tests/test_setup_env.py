@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,8 +29,12 @@ class FakeRunner:
         whisper=False,
         venv_python_name="bin/python",
         install_python=(0, ""),
+        av_ok=True,
+        av_version="18.1.0",
     ):
         self.venv = venv
+        self.av_ok = av_ok
+        self.av_version = av_version
         self.interpreters = interpreters if interpreters is not None else {"python3": (3, 12, 64)}
         self.audio_pip = audio_pip
         self.core_pip = core_pip
@@ -90,13 +95,26 @@ class FakeRunner:
                 self.interpreters["py -3.12"] = (3, 12, 64)
             return setup_env.RunResult(*self.install_python)
 
-        if cmd[-1] == "import faster_whisper":
-            ok = self.whisper or self.audio_attempted
-            return setup_env.RunResult(0, "") if ok else setup_env.RunResult(1, "ModuleNotFoundError")
+        if cmd[-1] == compat.AUDIO_PROBE_CODE:
+            # .venv 안에서 도는 음성 변환 점검(faster-whisper + av.open 서명)
+            installed = self.whisper or self.audio_attempted
+            ok = installed and self.av_ok
+            info = {
+                "faster_whisper": installed,
+                "av": self.av_version if installed else "",
+                "av_open_ok": ok,
+                "error": "" if ok else ("av %s has no metadata_errors" % self.av_version if installed else "ModuleNotFoundError"),
+            }
+            code = 0 if ok else (4 if installed else 3)
+            return setup_env.RunResult(code, json.dumps(info) + "\n")
 
         if "install" in cmd:
             if any(part.endswith("requirements-audio.txt") for part in cmd):
                 self.audio_attempted = True
+                if self.audio_pip[0] == 0:
+                    # 요구 버전(av<19)으로 다시 설치되면 점검도 통과한다
+                    self.av_ok = True
+                    self.av_version = "18.1.0"
                 return setup_env.RunResult(*self.audio_pip)
             if any(part.endswith("requirements.txt") for part in cmd):
                 return setup_env.RunResult(*self.core_pip)
@@ -431,6 +449,77 @@ class InstallPythonTest(SetupTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(len(runner.winget_calls()), 1)
         self.assertTrue(setup.deps_ok.exists())
+
+
+class AudioLibraryMismatchTest(SetupTestCase):
+    """av 19 이상이 깔려 .m4a 를 읽지 못하는 .venv 를 자동으로 고치는지."""
+
+    def _broken_setup(self, **kwargs):
+        runner = FakeRunner(whisper=True, av_ok=False, av_version="19.0.2", **kwargs)
+        setup = self.make(runner)
+        setup.ensure_venv()
+        setup.install_core()
+        return runner, setup
+
+    def test_probe_notices_engine_is_unusable(self):
+        runner, setup = self._broken_setup()
+        self.assertFalse(setup.check_audio_runtime())
+        probe = setup.probe_audio()
+        self.assertTrue(probe.faster_whisper, "패키지는 깔려 있다")
+        self.assertTrue(probe.broken_av)
+        self.assertEqual(probe.av_version, "19.0.2")
+
+    def test_ensure_audio_repairs_av_and_reports_installed(self):
+        runner, setup = self._broken_setup()
+        status = setup.ensure_audio()
+        self.assertEqual(status, "installed")
+        self.assertTrue(setup.check_audio_runtime())
+        calls = runner.pip_calls("requirements-audio.txt")
+        self.assertEqual(len(calls), 1, "맞는 버전으로 다시 설치해야 한다")
+        self.assertIn("--upgrade", calls[0], "이미 깔린 av 를 교체하려면 --upgrade 가 필요하다")
+        self.assertTrue(setup.audio_ok.exists())
+        self.assertIn("av 19.0.2", self.output())
+        self.assertIn("다시 설치", self.output())
+
+    def test_mismatch_repairs_even_when_previous_failure_was_recorded(self):
+        runner, setup = self._broken_setup()
+        setup.write_skip("wheel", "onnxruntime wheel 없음")
+        runner.calls.clear()
+        self.assertEqual(setup.ensure_audio(), "installed")
+        self.assertEqual(len(runner.pip_calls("requirements-audio.txt")), 1)
+
+    def test_audio_ok_marker_records_probe(self):
+        runner, setup = self._broken_setup()
+        setup.ensure_audio()
+        payload = json.loads(setup.audio_ok.read_text(encoding="utf-8"))
+        self.assertTrue(payload.get("probe"), ".bat 이 옛 설치를 알아볼 수 있는 표시")
+        self.assertEqual(payload.get("av"), "18.1.0")
+
+    def test_present_engine_is_not_reinstalled(self):
+        runner = FakeRunner(whisper=True, av_ok=True, av_version="18.1.0")
+        setup = self.make(runner)
+        setup.ensure_venv()
+        setup.install_core()
+        self.assertEqual(setup.ensure_audio(), "present")
+        self.assertEqual(runner.pip_calls("requirements-audio.txt"), [])
+
+    def test_status_explains_mismatch(self):
+        runner, setup = self._broken_setup()
+        text = "\n".join(setup.status_lines())
+        self.assertIn("av 19.0.2", text)
+        self.assertIn("설치_점검.bat", text)
+        self.assertNotIn("winget install", text, "av 불일치는 Python 문제가 아니다")
+
+    def test_install_still_failing_reports_reason(self):
+        # 설치 명령은 성공했는데 점검이 계속 실패하는 드문 경우
+        runner = FakeRunner(whisper=True, av_ok=False, av_version="19.0.2", audio_pip=(0, ""))
+        runner.av_ok = False
+        setup = self.make(runner)
+        setup.ensure_venv()
+        setup.install_core()
+        setup.probe_audio = lambda: compat.AudioProbe(faster_whisper=True, av_version="19.0.2", av_open_ok=False)
+        self.assertEqual(setup.ensure_audio(), "failed")
+        self.assertIn("점검을 통과하지 못했습니다", self.output())
 
 
 class PrepareTest(SetupTestCase):
