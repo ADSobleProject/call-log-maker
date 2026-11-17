@@ -161,6 +161,7 @@
 | 증상 | 해결 |
 | --- | --- |
 | `Python 3 was not found` | Python 설치 후 새 창에서 다시 실행 (PATH 체크) |
+| Python 3.13 에서 설치 실패 | ctranslate2 wheel 이 아직 없을 수 있습니다. Python 3.11/3.12 를 설치해 다시 실행 |
 | 패키지 설치 실패 | 인터넷 확인 후 다시 실행. 수동: `.venv\Scripts\pip install faster-whisper python-docx` |
 | 음성 파일이 변환되지 않음 | `doctor` 로 점검: `.venv\Scripts\python -m calllog doctor` |
 | 받아쓰기가 부정확 | `config.json` 에서 `model` 을 `medium` 으로, 조용한 녹음 사용 |
