@@ -1,0 +1,22 @@
+{
+  "input_dir": "input",
+  "output_dir": "output",
+  "processed_dir": "processed",
+  "archive_processed": true,
+  "keep_raw_transcript": false,
+  "watch_interval_sec": 3,
+  "max_keywords": 10,
+  "max_summary_sentences": 5,
+  "max_action_items": 8,
+  "title_max_len": 40,
+  "document_formats": ["md", "docx"],
+  "transcribe": {
+    "model": "small",
+    "language": "ko",
+    "device": "auto",
+    "compute_type": "auto",
+    "beam_size": 5,
+    "vad_filter": true,
+    "initial_prompt": "한국어 통화 내용입니다. 상대방 이름, 날짜, 금액, 약속, 요청 사항이 포함될 수 있습니다."
+  }
+}
