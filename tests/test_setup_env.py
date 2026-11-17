@@ -423,6 +423,16 @@ class InstallPythonTest(SetupTestCase):
         self.assertIn("음성 파일 변환: 사용 안 함", self.output())
 
 
+    def test_no_usable_python_then_installs(self):
+        runner = FakeRunner(venv=None, interpreters={})
+        setup = self.make(runner, windows=True)
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 6), 64, "boot")):
+            code = setup.prepare(install_python=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(runner.winget_calls()), 1)
+        self.assertTrue(setup.deps_ok.exists())
+
+
 class PrepareTest(SetupTestCase):
     def test_prepare_succeeds_in_text_only_mode(self):
         self.make_existing_venv()

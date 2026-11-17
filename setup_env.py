@@ -507,22 +507,34 @@ class Setup:
         return lines
 
     # ------------------------------------------------------------------- 실행
+    def _wants_install(self, install_python: bool, offer_install: bool) -> bool:
+        """64비트 3.12 설치를 지금 할지. (--install-python 이면 바로, 아니면 물어보고)"""
+        if install_python:
+            return True
+        return bool(
+            offer_install
+            and self.windows
+            and self.can_ask()
+            and self.ask("지금 64비트 Python 3.12 를 자동으로 설치할까요?")
+        )
+
     def prepare(self, repair: bool = False, core_only: bool = False, install_python: bool = False, offer_install: bool = False) -> int:
         self.log("=" * 58)
         self.log("  통화록 변환기 — 환경 준비")
         self.log("=" * 58)
         if not self.ensure_venv():
-            return 1
+            # 쓸 만한 Python 이 아예 없을 때도 설치를 권할 수 있다
+            if not (self._wants_install(install_python, offer_install) and self.install_python() and self.ensure_venv()):
+                return 1
         if not self.install_core(force=False):
             return 1
         status = self.ensure_audio(force=repair, core_only=core_only)
 
-        # 음성 패키지가 '이 PC 의 Python' 때문에 막혔 → 64비트 3.12 설치를 권하고,
+        # 음성 패키지가 '이 PC 의 Python' 때문에 막혔으면 64비트 3.12 설치를 권하고,
         # 사용자가 동의하면 바로 설치해 다시 준비한다.
         wheel_problem = status == "unsupported" or (status == "failed" and self._skip_reason() == "wheel")
         if wheel_problem and not core_only and self.windows:
-            wanted = install_python or (offer_install and self.can_ask() and self.ask("지금 64비트 Python 3.12 를 자동으로 설치할까요?"))
-            if wanted and self.install_python():
+            if self._wants_install(install_python, offer_install) and self.install_python():
                 self.log("")
                 self.log("  · 새 Python 으로 .venv 를 다시 준비합니다")
                 if not self.ensure_venv():
