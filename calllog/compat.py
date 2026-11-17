@@ -165,16 +165,17 @@ def describe_audio_problem(interpreter: Interpreter | None) -> str:
 
 def audio_help_lines(interpreter: Interpreter | None = None) -> list[str]:
     """음성 변환을 켜는 방법 안내(여러 줄)."""
-    lines = ["[음성 파일도 변환하려면]"]
+    lines = ["[음성 파일도 변환하려면] 64비트 Python 3.12 가 필요합니다"]
     if interpreter is not None:
         lines.append(f"  지금 Python: {interpreter.describe()}")
     lines.extend(
         [
-            "  1) 64비트 Python 3.12 설치 (PowerShell/명령 프롬프트에서 한 줄):",
+            "  가장 쉬운 방법: '설치_점검.bat'을 실행하고 '자동으로 설치할까요?'에 y",
+            "  (또는 명령 프롬프트에서 한 줄)",
             f"       winget install -e --id {WINGET_ID}",
-            "  2) winget 이 없으면 이 주소에서 'Windows installer (64-bit)' 3.12 를 받아 설치",
+            "  winget 이 없으면 이 주소에서 'Windows installer (64-bit)' 3.12 를 받아 설치",
             f"       {PYTHON_DOWNLOADS}   (설치 화면에서 'Add python.exe to PATH' 체크)",
-            "  3) 이 창을 닫고 '설치_점검.bat' 을 다시 실행",
+            "  설치한 뒤 '설치_점검.bat'을 다시 실행하면 음성 변환이 켜집니다.",
             "  ※ .txt 통화록 변환은 지금도 그대로 됩니다.",
         ]
     )

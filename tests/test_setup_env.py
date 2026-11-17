@@ -27,6 +27,7 @@ class FakeRunner:
         docx=True,
         whisper=False,
         venv_python_name="bin/python",
+        install_python=(0, ""),
     ):
         self.venv = venv
         self.interpreters = interpreters if interpreters is not None else {"python3": (3, 12, 64)}
@@ -35,6 +36,7 @@ class FakeRunner:
         self.docx = docx
         self.whisper = whisper
         self.venv_python_name = venv_python_name
+        self.install_python = install_python
         self.venv_path = None
         self.calls = []
         self.audio_attempted = False
@@ -49,6 +51,9 @@ class FakeRunner:
         if need:
             found = [c for c in found if any(need in part for part in c)]
         return found
+
+    def winget_calls(self):
+        return [c for c in self.calls if c and c[0] == "winget"]
 
     def venv_creations(self):
         return [c for c in self.calls if "-m" in c and "venv" in c]
@@ -73,10 +78,17 @@ class FakeRunner:
             python = target / self.venv_python_name
             python.parent.mkdir(parents=True, exist_ok=True)
             python.write_text("")
+            self.venv = (3, 12, 64)  # 새로 만든 .venv 는 64비트 3.12 로 본다
             return setup_env.RunResult(0, "")
 
         if cmd[-1] == "import docx":
             return setup_env.RunResult(0, "") if self.docx else setup_env.RunResult(1, "ModuleNotFoundError: docx")
+
+        if cmd and cmd[0] == "winget":
+            if self.install_python[0] == 0:
+                # 설치가 끝나면 새 Python 이 생긴 것으로 본다
+                self.interpreters["py -3.12"] = (3, 12, 64)
+            return setup_env.RunResult(*self.install_python)
 
         if cmd[-1] == "import faster_whisper":
             ok = self.whisper or self.audio_attempted
@@ -339,6 +351,76 @@ class AudioPackagesTest(SetupTestCase):
         setup.install_core()
         self.assertEqual(setup.ensure_audio(core_only=True), "skipped")
         self.assertEqual(runner.pip_calls("requirements-audio.txt"), [])
+
+
+class InstallPythonTest(SetupTestCase):
+    def _setup_32bit_pc(self, runner, asker=None):
+        self.make_existing_venv(windows=True)
+        setup = self.make(runner, windows=True)
+        setup._asker = asker if asker is not None else (lambda _q: False)
+        return setup
+
+    def test_install_python_flag_runs_winget_and_rebuilds(self):
+        runner = FakeRunner(venv=(3, 12, 32), interpreters={"python3": (3, 12, 32)})
+        setup = self._setup_32bit_pc(runner)
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 12), 32, "boot")):
+            code = setup.prepare(install_python=True)
+        self.assertEqual(code, 0)
+        winget = runner.winget_calls()
+        self.assertEqual(len(winget), 1)
+        self.assertIn("Python.Python.3.12", winget[0])
+        self.assertIn("--accept-package-agreements", winget[0])
+        # 새 3.12 로 .venv 를 다시 만들고 음성 패키지까지 설치했다
+        self.assertEqual(len(runner.venv_creations()), 1)
+        self.assertIn("-3.12", runner.venv_creations()[0])
+        self.assertTrue(setup.audio_ok.exists())
+        self.assertIn("음성 파일 변환: 사용 가능", self.output())
+
+    def test_offer_install_installs_when_user_agrees(self):
+        runner = FakeRunner(venv=(3, 12, 32), interpreters={"python3": (3, 12, 32)})
+        setup = self._setup_32bit_pc(runner, asker=lambda _q: True)
+        setup.can_ask = lambda: True
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 12), 32, "boot")):
+            code = setup.prepare(offer_install=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(runner.winget_calls()), 1)
+
+    def test_offer_install_respects_no(self):
+        runner = FakeRunner(venv=(3, 12, 32), interpreters={"python3": (3, 12, 32)})
+        setup = self._setup_32bit_pc(runner, asker=lambda _q: False)
+        setup.can_ask = lambda: True
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 12), 32, "boot")):
+            code = setup.prepare(offer_install=True)
+        self.assertEqual(code, 0, ".txt 전용으로 계속되어야 한다")
+        self.assertEqual(runner.winget_calls(), [])
+        self.assertIn("음성 파일 변환: 사용 안 함", self.output())
+
+    def test_no_prompt_when_not_interactive(self):
+        runner = FakeRunner(venv=(3, 12, 32), interpreters={"python3": (3, 12, 32)})
+        setup = self._setup_32bit_pc(runner, asker=lambda _q: True)
+        setup.can_ask = lambda: False
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 12), 32, "boot")):
+            setup.prepare(offer_install=True)
+        self.assertEqual(runner.winget_calls(), [])
+
+    def test_winget_only_on_windows(self):
+        self.make_existing_venv()
+        runner = FakeRunner(venv=(3, 12, 32), whisper=False, interpreters={"python3": (3, 12, 32)})
+        setup = self.make(runner, windows=False)
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 12), 32, "boot")):
+            code = setup.prepare(install_python=True)
+        self.assertEqual(code, 0)
+        self.assertEqual(runner.winget_calls(), [])
+        self.assertIn("Windows", self.output())
+
+    def test_failed_winget_keeps_text_mode(self):
+        runner = FakeRunner(venv=(3, 12, 32), interpreters={"python3": (3, 12, 32)}, install_python=(1, "winget not found"))
+        setup = self._setup_32bit_pc(runner)
+        with mock.patch.object(compat, "current_interpreter", lambda: compat.Interpreter((3, 12), 32, "boot")):
+            code = setup.prepare(install_python=True)
+        self.assertEqual(code, 0)
+        self.assertIn(".txt 통화록 변환: 사용 가능", self.output())
+        self.assertIn("음성 파일 변환: 사용 안 함", self.output())
 
 
 class PrepareTest(SetupTestCase):

@@ -12,6 +12,8 @@
 사용법
     python setup_env.py             # 필요한 것만 준비 (이미 되어 있으면 즉시 끝)
     python setup_env.py --repair    # 음성 변환 설치를 다시 시도
+    python setup_env.py --ask-install   # 음성 패키지가 안 되면 64비트 3.12 설치를 물어본다
+    python setup_env.py --install-python  # 64비트 3.12 설치를 바로 시도(winget)
     python setup_env.py --core-only # .txt 변환용 패키지만
     python setup_env.py --check     # 아무것도 바꾸지 않고 상태만 보기
 """
@@ -89,10 +91,11 @@ def _fix_console() -> None:
 class Setup:
     """환경 준비 한 판. 테스트에서는 runner/printer 를 바꿔 끼운다."""
 
-    def __init__(self, root=None, runner=None, printer=None, windows=None) -> None:
+    def __init__(self, root=None, runner=None, printer=None, windows=None, asker=None) -> None:
         self.root = Path(root).resolve() if root else PROJECT_ROOT
         self._runner = runner or run_command
         self._print = printer or print
+        self._asker = asker if asker is not None else self._ask_yes
         self.windows = (os.name == "nt") if windows is None else bool(windows)
         self.venv = self.root / ".venv"
         self._candidates: list[compat.Interpreter] | None = None
@@ -120,6 +123,25 @@ class Setup:
 
     def log(self, message: str = "") -> None:
         self._print(message)
+
+    # ------------------------------------------------------------- 사용자 확인
+    def can_ask(self) -> bool:
+        """창에서 직접 물어볼 수 있는 상황인가(테스트·자동 실행에서는 물어보지 않는다)."""
+        try:
+            return bool(sys.stdin and sys.stdin.isatty())
+        except (AttributeError, OSError):
+            return False
+
+    def ask(self, question: str) -> bool:
+        return bool(self._asker(question))
+
+    @staticmethod
+    def _ask_yes(question: str) -> bool:
+        try:
+            answer = input(f"  {question} [y/N] ").strip().lower()
+        except (EOFError, OSError, KeyboardInterrupt):
+            return False
+        return answer in {"y", "yes"}
 
     def _run(self, cmd, timeout=None) -> RunResult:
         return self._runner(list(cmd), timeout=timeout)
@@ -273,6 +295,37 @@ class Setup:
         self.log("    설치:  winget install -e --id " + compat.WINGET_ID)
         self.log("    또는 " + compat.PYTHON_DOWNLOADS + " 에서 'Windows installer (64-bit)' 3.12")
         self.log("    ※ 32비트가 아닌 64비트를 고르세요. 설치 화면에서 'Add python.exe to PATH' 체크.")
+
+    # ------------------------------------------------------------ 파이썬 설치
+    def install_python(self) -> bool:
+        """winget 으로 64비트 Python 3.12 설치를 시도한다(사용자가 동의했을 때만 부른다)."""
+        if not self.windows:
+            self.log("  · 자동 설치은 Windows 에서만 됩니다. python.org 에서 설치해 주세요.")
+            return False
+        self.log("  · 64비트 Python 3.12 설치를 시작합니다 (winget, 몇 분 걸릴 수 있습니다) ...")
+        result = self._run(
+            [
+                "winget",
+                "install",
+                "-e",
+                "--id",
+                compat.WINGET_ID,
+                "--accept-source-agreements",
+                "--accept-package-agreements",
+                "--disable-interactivity",
+            ],
+            timeout=1800,
+        )
+        if not result.ok:
+            self.log("  ! 자동 설치가 되지 않았습니다(winget 없음·인터넷 등). 화면 안내대로 직접 설치해 주세요.")
+            return False
+        self._candidates = None  # 새로 설치된 Python 을 다시 찾는다
+        best = self.best()
+        if best is not None and compat.is_audio_ready(best.version, best.bits):
+            self.log(f"  ✓ Python 설치 완료: {best.describe()}")
+            return True
+        self.log("  ! 설치는 되었지만 새 Python 을 아직 찾지 못했습니다. 이 창을 닫고 '설치_점검.bat' 을 다시 실행해 주세요.")
+        return False
 
     # ------------------------------------------------------------- 필수 패키지
     def check_core_import(self) -> bool:
@@ -454,7 +507,7 @@ class Setup:
         return lines
 
     # ------------------------------------------------------------------- 실행
-    def prepare(self, repair: bool = False, core_only: bool = False) -> int:
+    def prepare(self, repair: bool = False, core_only: bool = False, install_python: bool = False, offer_install: bool = False) -> int:
         self.log("=" * 58)
         self.log("  통화록 변환기 — 환경 준비")
         self.log("=" * 58)
@@ -463,6 +516,20 @@ class Setup:
         if not self.install_core(force=False):
             return 1
         status = self.ensure_audio(force=repair, core_only=core_only)
+
+        # 음성 패키지가 '이 PC 의 Python' 때문에 막혔 → 64비트 3.12 설치를 권하고,
+        # 사용자가 동의하면 바로 설치해 다시 준비한다.
+        wheel_problem = status == "unsupported" or (status == "failed" and self._skip_reason() == "wheel")
+        if wheel_problem and not core_only and self.windows:
+            wanted = install_python or (offer_install and self.can_ask() and self.ask("지금 64비트 Python 3.12 를 자동으로 설치할까요?"))
+            if wanted and self.install_python():
+                self.log("")
+                self.log("  · 새 Python 으로 .venv 를 다시 준비합니다")
+                if not self.ensure_venv():
+                    return 1
+                if not self.install_core(force=True):
+                    return 1
+                status = self.ensure_audio(force=True)
 
         self.log("")
         self.log("-" * 58)
@@ -483,20 +550,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--repair", action="store_true", help="음성 변환 패키지 설치를 처음부터 다시 시도")
     parser.add_argument("--core-only", action="store_true", help=".txt 변환용 필수 패키지만 설치")
+    parser.add_argument("--ask-install", action="store_true", help="음성 패키지가 안 되면 64비트 Python 3.12 설치를 물어본다")
+    parser.add_argument("--install-python", action="store_true", help="64비트 Python 3.12 설치를 바로 시도(winget)")
     parser.add_argument("--check", action="store_true", help="아무것도 바꾸지 않고 상태만 확인")
     parser.add_argument("--root", help="프로젝트 폴더 (기본: 이 파일이 있는 폴더)")
     return parser
 
 
-def main(argv=None, runner=None, printer=None) -> int:
+def main(argv=None, runner=None, printer=None, asker=None) -> int:
     _fix_console()
     args = build_parser().parse_args(argv)
-    setup = Setup(root=args.root, runner=runner, printer=printer)
+    setup = Setup(root=args.root, runner=runner, printer=printer, asker=asker)
     if args.check:
         for line in setup.status_lines():
             setup.log(line)
         return 0
-    return setup.prepare(repair=args.repair, core_only=args.core_only)
+    return setup.prepare(
+        repair=args.repair,
+        core_only=args.core_only,
+        install_python=args.install_python,
+        offer_install=args.ask_install,
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover
