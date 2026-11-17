@@ -171,7 +171,7 @@ def write_docx(doc: CallDocument, path: str | Path) -> Path:  # pragma: no cover
     from docx import Document
     from docx.enum.table import WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Pt, RGBColor
+    from docx.shared import Cm, Pt, RGBColor
 
     document = Document()
     _set_korean_font(document.styles["Normal"])
@@ -208,7 +208,10 @@ def write_docx(doc: CallDocument, path: str | Path) -> Path:  # pragma: no cover
         run.bold = True
         cells[1].paragraphs[0].add_run(str(value))
         _shade(cells[0])
-    table.columns[0].width = None
+    # 라벨 칸은 좁게, 내용 칸은 넓게 (A4 기준)
+    for row in table.rows:
+        row.cells[0].width = Cm(3.2)
+        row.cells[1].width = Cm(12.0)
 
     document.add_heading("🔑 주요 키워드", level=1)
     if doc.keywords:
