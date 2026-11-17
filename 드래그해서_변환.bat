@@ -22,6 +22,8 @@ if not exist ".venv\.deps_ok" goto :setup
 REM Audio packages installed by an older version: verify once (fixes a
 REM mismatched audio library such as av 19) and then stay fast.
 if not exist ".venv\.audio_ok" goto :run
+REM .audio_skip = audio packages are known not to work on this PC; do not retry.
+if exist ".venv\.audio_skip" goto :run
 findstr /C:"probe" ".venv\.audio_ok" >nul 2>nul
 if errorlevel 1 goto :setup
 goto :run
