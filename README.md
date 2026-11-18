@@ -51,7 +51,8 @@
 
 PC 없이 휴대폰 브라우저에서 바로 씁니다. 삼성 “음성녹음” 앱에서 녹음을 텍스트로 저장한 뒤:
 
-1. 위 주소를 연다 (브라우저 메뉴의 **홈 화면에 추가**를 해 두면 앱처럼 열립니다)
+1. 위 주소를 연다 → 크롬 우상단 **⋮ → 앱 설치**(또는 **홈 화면에 추가**)를 누르면 주소창 없는 앱으로 설치됩니다
+   · 설치하면 첫 실행 뒤에는 **인터넷 없이도** 열립니다(파일은 폰 안에서만 처리)
 2. **.txt 파일 고르기** 또는 내용 **붙여넣기**
 3. 상대방·일시는 파일명/본문에서 **자동으로 채워집니다** — 필요하면 고치고
 4. **복사하기**(Markdown) · **.md** · **.docx** 저장, 또는 휴대폰 공유 시트로 바로 보내기
@@ -240,13 +241,17 @@ calllog/
   watcher.py     폴더 감시
 docs/            휴대폰 웹앱 (GitHub Pages 로 그대로 배포 · 빌드 없음)
   index.html     화면
+  manifest.json  PWA 매니페스트 — 홈 화면에 앱으로 설치
+  sw.js          서비스 워커 (네트워크 우선 · 오프라인 셸 캐시 'call-log-maker-v1')
+  icons/         앱 아이콘 (icon.svg · 192 · 512 · maskable · 애플 180)
   assets/app.js  화면 조작 — 입력창은 다시 그리지 않는다(한글 조합 보호)
   assets/lib/    util.js(zip·crc32) · filenames.js · parsers.js · analyze.js · render.js · docx.js · build.js
                  ↑ PC 버전(calllog/*.py)을 그대로 옮긴 것 — 같은 결과가 나오는지 테스트로 비교
 setup_env.py     환경 준비(.venv 생성·복구, 필수→선택 패키지 순서 설치)
 requirements.txt        필수: python-docx
 requirements-audio.txt  선택: faster-whisper + av<19 (음성 변환, PyAV 19 는 faster-whisper 와 비호환)
-tests/           161개 자동화 테스트 (웹앱 JS 테스트 포함)
+tests/           170개 자동화 테스트 (웹앱 JS · PWA 테스트 포함)
+  test_pwa.py           매니페스트·아이콘·서비스 워커 검사
   web/run_js_tests.js   브라우저 없이 도는 JS 테스트 (Node 또는 quickjs)
   web/dom_stub.js       app.js 화면 점검용 최소 DOM
 samples/         예시 txt 3종

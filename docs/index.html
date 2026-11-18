@@ -7,8 +7,16 @@
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="삼성 통화녹음·음성녹음 .txt 파일을 붙여넣으면 깔끔한 통화록(.md/.docx)으로 바꿔 주는 무료 웹앱. 파일이 서버로 전송되지 않습니다.">
 <title>통화록 변환기 · 모바일 웹앱</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f2a44'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle'%3E%F0%9F%93%9E%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="assets/app.css?v=2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="통화록">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="./icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="stylesheet" href="assets/app.css?v=3">
 </head>
 <body>
 <header class="top">
@@ -103,6 +111,7 @@
       <li><b>복사하기</b>를 누르면 통화록 전체가 Markdown으로 복사돼 노션·메신저에 바로 붙일 수 있어요.</li>
       <li><b>.docx 저장</b>은 Word·한컴오피스에서 바로 열립니다. 공유는 휴대폰 공유 시트로 보냅니다.</li>
       <li>PC에서는 녹음 파일(.m4a)까지 변환됩니다 — <a href="https://github.com/ADSobleProject/call-log-maker" target="_blank" rel="noopener">PC 버전 안내</a>.</li>
+      <li><b>홈 화면에 추가</b>하면 주소창 없이 앱처럼 열립니다(크롬: 우상단 ⋮ → <b>앱 설치</b> / 홈 화면에 추가). 한 번 열어 두면 인터넷이 없어도 그대로 실행돼요.</li>
     </ul>
   </details>
 </main>
@@ -120,13 +129,21 @@
   <p>call-log-maker · 무료·오프라인 · 내용은 원본 기록을 확인해 주세요.</p>
 </footer>
 
-<script src="assets/lib/util.js?v=2"></script>
-<script src="assets/lib/filenames.js?v=2"></script>
-<script src="assets/lib/parsers.js?v=2"></script>
-<script src="assets/lib/analyze.js?v=2"></script>
-<script src="assets/lib/render.js?v=2"></script>
-<script src="assets/lib/docx.js?v=2"></script>
-<script src="assets/lib/build.js?v=2"></script>
-<script src="assets/app.js?v=2"></script>
+<script src="assets/lib/util.js?v=3"></script>
+<script src="assets/lib/filenames.js?v=3"></script>
+<script src="assets/lib/parsers.js?v=3"></script>
+<script src="assets/lib/analyze.js?v=3"></script>
+<script src="assets/lib/render.js?v=3"></script>
+<script src="assets/lib/docx.js?v=3"></script>
+<script src="assets/lib/build.js?v=3"></script>
+<script src="assets/app.js?v=3"></script>
+<script>
+/* 홈 화면에 추가하면 앱처럼(standalone) 열립니다 — 오프라인 셸 캐시 등록 */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function () {});
+  });
+}
+</script>
 </body>
 </html>

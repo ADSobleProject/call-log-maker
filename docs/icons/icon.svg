@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="통화록 변환기">
+  <title>통화록 변환기</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#33456F"/>
+      <stop offset="0.55" stop-color="#26334F"/>
+      <stop offset="1" stop-color="#181F32"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5C8BFF"/>
+      <stop offset="1" stop-color="#2F5BD7"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EDF1F9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <path d="M0 116C0 52 52 0 116 0h280c64 0 116 52 116 116v104C404 158 300 128 178 160 108 179 44 210 0 240z" fill="url(#shine)"/>
+
+  <!-- 통화록 종이 -->
+  <rect x="128" y="86" width="256" height="308" rx="32" fill="url(#paper)"/>
+  <!-- 대화 줄 -->
+  <rect x="168" y="142" width="120" height="20" rx="10" fill="#2F5BD7"/>
+  <rect x="168" y="190" width="176" height="18" rx="9" fill="#C2CDE1"/>
+  <rect x="168" y="228" width="136" height="18" rx="9" fill="#C2CDE1"/>
+  <rect x="168" y="266" width="176" height="18" rx="9" fill="#C2CDE1"/>
+  <rect x="168" y="304" width="104" height="18" rx="9" fill="#C2CDE1"/>
+
+  <!-- 수화기 배지 -->
+  <circle cx="352" cy="352" r="92" fill="url(#bg)"/>
+  <circle cx="352" cy="352" r="80" fill="url(#accent)"/>
+  <g transform="translate(302.6 301.6) scale(4.2)" fill="#FFFFFF">
+    <path d="M6.62 10.79a15.05 15.05 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.02-.24c1.12.37 2.33.57 3.57.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.61 21 3 13.39 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1.02l-2.2 2.2z"/>
+  </g>
+</svg>
