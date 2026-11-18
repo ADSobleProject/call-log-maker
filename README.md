@@ -6,6 +6,10 @@
 
 결과 예시: [`docs/예시_통화록.md`](docs/예시_통화록.md) · [`docs/예시_통화록.docx`](docs/예시_통화록.docx)
 
+> 📱 **휴대폰에서는 웹앱으로 바로:** <https://adsobleproject.github.io/call-log-maker/>
+> 녹음 텍스트(.txt)를 고르거나 붙여넣으면 그 자리에서 통화록이 만들어집니다. 설치·로그인·API 키 없이,
+> 파일이 휴대폰 밖으로 나가지 않습니다.
+
 ---
 
 ## ⚡ 3줄 사용법
@@ -38,6 +42,28 @@
 | **전체 대화 기록** | 화자와 타임스탬프가 붙은 원문 전체 (생략 없음) |
 
 결과 파일 이름: `20261117_2100_김지훈_통화록.md` / `.docx`
+
+---
+
+## 📱 휴대폰에서 쓰기 (웹앱)
+
+**<https://adsobleproject.github.io/call-log-maker/>**
+
+PC 없이 휴대폰 브라우저에서 바로 씁니다. 삼성 “음성녹음” 앱에서 녹음을 텍스트로 저장한 뒤:
+
+1. 위 주소를 연다 (브라우저 메뉴의 **홈 화면에 추가**를 해 두면 앱처럼 열립니다)
+2. **.txt 파일 고르기** 또는 내용 **붙여넣기**
+3. 상대방·일시는 파일명/본문에서 **자동으로 채워집니다** — 필요하면 고치고
+4. **복사하기**(Markdown) · **.md** · **.docx** 저장, 또는 휴대폰 공유 시트로 바로 보내기
+
+| 항목 | 내용 |
+| --- | --- |
+| 서버 | 없음 — 모든 계산이 브라우저 안에서 끝납니다 (무료, API 키·로그인 불필요) |
+| 파일 전송 | 없음 — 고른 파일은 휴대폰을 떠나지 않습니다 |
+| 결과 양식 | PC 버전과 같은 통화록 (같은 입력이면 같은 Markdown 이 나오도록 테스트로 고정) |
+| 오프라인 | 한 번 열어 두면 인터넷 없이도 동작 (`index.html` 을 직접 열어도 됨) |
+
+> 웹앱은 **텍스트(.txt)** 만 다룹니다. 녹음 파일(.m4a)을 글자로 옮기는 음성인식은 PC 버전에서 하세요.
 
 ---
 
@@ -210,10 +236,17 @@ calllog/
   render.py      .md / .docx 생성
   pipeline.py    중복 방지·결과 저장·원본 이동
   watcher.py     폴더 감시
+docs/            휴대폰 웹앱 (GitHub Pages 로 그대로 배포 · 빌드 없음)
+  index.html     화면
+  assets/app.js  화면 조작 — 입력창은 다시 그리지 않는다(한글 조합 보호)
+  assets/lib/    util.js(zip·crc32) · filenames.js · parsers.js · analyze.js · render.js · docx.js · build.js
+                 ↑ PC 버전(calllog/*.py)을 그대로 옮긴 것 — 같은 결과가 나오는지 테스트로 비교
 setup_env.py     환경 준비(.venv 생성·복구, 필수→선택 패키지 순서 설치)
 requirements.txt        필수: python-docx
 requirements-audio.txt  선택: faster-whisper + av<19 (음성 변환, PyAV 19 는 faster-whisper 와 비호환)
-tests/           147개 자동화 테스트
+tests/           155개 자동화 테스트 (웹앱 JS 테스트 포함)
+  web/run_js_tests.js   브라우저 없이 도는 JS 테스트 (Node 또는 quickjs)
+  web/dom_stub.js       app.js 화면 점검용 최소 DOM
 samples/         예시 txt 3종
 ```
 
@@ -221,7 +254,9 @@ samples/         예시 txt 3종
 python setup_env.py --check                 # 환경 상태만 확인(아무것도 바꾸지 않음)
 python setup_env.py --core-only             # .txt 변환용 패키지만 설치
 python setup_env.py --repair                # 음성 패키지 설치 다시 시도
-python -m unittest discover -s tests -t .   # 테스트
+python -m unittest discover -s tests -t .   # 테스트 (웹앱 JS 테스트는 quickjs 가 있을 때만 실행)
+pip install quickjs                         # 웹앱 JS 테스트까지 돌릴 때 (없으면 그 8개는 건너뜀)
+node tests/web/run_js_tests.js              # Node 가 있으면 JS 테스트만 따로
 python -m calllog demo                      # 샘플로 결과 미리보기
 python -m calllog doctor                    # 설치·설정 점검
 python -m calllog batch --config 내설정.json
@@ -235,5 +270,7 @@ python -m calllog batch --config 내설정.json
 ## 🔒 개인정보
 
 - 모든 처리는 내 PC에서만 이루어집니다. 녹음 파일·결과물이 서버로 전송되지 않습니다.
+- 휴대폰 웹앱(`docs/`)도 서버가 없습니다. 고른 파일은 브라우저 메모리에서만 읽고, 아무 곳에도 저장·전송하지 않습니다
+  (입력 내용을 브라우저 저장소에도 남기지 않습니다).
 - 모델 최초 다운로드 때만 Hugging Face에 접속합니다.
 - `input/`, `output/`, `processed/` 내용은 `.gitignore` 로 제외되어 GitHub에 올라가지 않습니다.

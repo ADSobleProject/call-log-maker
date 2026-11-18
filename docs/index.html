@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f2a44">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="삼성 통화녹음·음성녹음 .txt 파일을 붙여넣으면 깔끔한 통화록(.md/.docx)으로 바꿔 주는 무료 웹앱. 파일이 서버로 전송되지 않습니다.">
+<title>통화록 변환기 · 모바일 웹앱</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231f2a44'/%3E%3Ctext x='32' y='45' font-size='34' text-anchor='middle'%3E%F0%9F%93%9E%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">📞</span>
+      <div>
+        <h1>통화록 변환기</h1>
+        <p class="brand-sub">.txt → 통화록(.md · .docx)</p>
+      </div>
+    </div>
+    <a class="top-link" href="예시_통화록.md" target="_blank" rel="noopener">결과 예시</a>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card intro">
+    <p>
+      삼성 통화녹음·음성녹음에서 내보낸 <b>.txt</b>를 고르거나 내용을 붙여넣으면
+      <b>기본 정보 · 키워드 · 요약 · 할 일 · 전체 대화</b>가 담긴 통화록을 만들어 줍니다.
+    </p>
+    <p class="privacy">
+      🔒 <b>파일이 서버로 전송되지 않습니다.</b> 모든 처리는 이 휴대폰 안에서만 이뤄지고,
+      광고·추적·로그인도 없습니다.
+    </p>
+  </section>
+
+  <!-- 1) 입력 -->
+  <section class="card">
+    <h2 class="step"><span class="num">1</span> 기록 가져오기</h2>
+
+    <div class="picker">
+      <input id="file" class="file-input" type="file" accept=".txt,text/plain" aria-label="통화 녹음 텍스트 파일 선택">
+      <label class="btn btn-primary btn-block" for="file">
+        <span aria-hidden="true">📄</span> .txt 파일 고르기
+      </label>
+      <p class="hint" id="file-hint">삼성 “음성녹음” 앱 → 녹음 선택 → 공유/저장 → 텍스트(.txt)</p>
+    </div>
+
+    <div class="or"><span>또는 붙여넣기</span></div>
+
+    <label class="sr-only" for="text">통화 녹음 텍스트</label>
+    <textarea id="text" rows="9" spellcheck="false" placeholder="예시)
+00:00
+화자 1
+여보세요, 안녕하세요. JFC 마케팅팀 김진혁입니다.
+
+00:05 화자 2: 네, 안녕하세요. 소블 매거진 김지훈입니다."></textarea>
+
+    <div class="row-between">
+      <span class="status" id="status" role="status" aria-live="polite"></span>
+      <span class="row-actions">
+        <button type="button" class="btn btn-ghost btn-small" id="example">예시로 채워 보기</button>
+        <button type="button" class="btn btn-ghost btn-small" id="clear">지우기</button>
+      </span>
+    </div>
+  </section>
+
+  <!-- 2) 정보 -->
+  <section class="card">
+    <h2 class="step"><span class="num">2</span> 상대방 · 일시 <span class="step-note">자동으로 채워지고, 고칠 수 있어요</span></h2>
+
+    <label class="field">
+      <span class="field-label">상대방 / 제목</span>
+      <input id="title" type="text" autocomplete="off" enterkeyhint="done" placeholder="예) 김지훈 대리">
+    </label>
+
+    <div class="field-grid">
+      <label class="field">
+        <span class="field-label">날짜</span>
+        <input id="date" type="date">
+      </label>
+      <label class="field">
+        <span class="field-label">시각</span>
+        <input id="time" type="time">
+      </label>
+    </div>
+  </section>
+
+  <!-- 3) 결과 -->
+  <section class="card">
+    <h2 class="step"><span class="num">3</span> 통화록 미리보기</h2>
+    <div id="preview" class="preview">
+      <p class="doc-empty">위에 .txt를 고르거나 내용을 붙여넣으면 여기에 통화록이 나타납니다.</p>
+    </div>
+  </section>
+
+  <details class="card tips">
+    <summary>이렇게 쓰면 좋아요</summary>
+    <ul>
+      <li>통화 직후 파일을 고르면 <b>상대방·일시</b>가 파일명에서 자동으로 채워집니다.</li>
+      <li><b>복사하기</b>를 누르면 통화록 전체가 Markdown으로 복사돼 노션·메신저에 바로 붙일 수 있어요.</li>
+      <li><b>.docx 저장</b>은 Word·한컴오피스에서 바로 열립니다. 공유는 휴대폰 공유 시트로 보냅니다.</li>
+      <li>PC에서는 녹음 파일(.m4a)까지 변환됩니다 — <a href="https://github.com/ADSobleProject/call-log-maker" target="_blank" rel="noopener">PC 버전 안내</a>.</li>
+    </ul>
+  </details>
+</main>
+
+<div class="actionbar" id="actionbar">
+  <div class="wrap actionbar-inner">
+    <button type="button" class="btn btn-primary btn-block" id="copy">복사하기</button>
+    <button type="button" class="btn" id="save-md">.md</button>
+    <button type="button" class="btn" id="save-docx">.docx</button>
+    <button type="button" class="btn" id="share" hidden>공유</button>
+  </div>
+</div>
+
+<footer class="wrap foot">
+  <p>call-log-maker · 무료·오프라인 · 내용은 원본 기록을 확인해 주세요.</p>
+</footer>
+
+<script src="assets/lib/util.js"></script>
+<script src="assets/lib/filenames.js"></script>
+<script src="assets/lib/parsers.js"></script>
+<script src="assets/lib/analyze.js"></script>
+<script src="assets/lib/render.js"></script>
+<script src="assets/lib/docx.js"></script>
+<script src="assets/lib/build.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
