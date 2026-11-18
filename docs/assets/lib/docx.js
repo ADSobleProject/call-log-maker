@@ -25,6 +25,15 @@
    */
   function runXml(run) {
     var props = [];
+    if (run.font) {
+      props.push(
+        "<w:rFonts" +
+          attr("w:ascii", run.font) +
+          attr("w:eastAsia", run.font) +
+          attr("w:hAnsi", run.font) +
+          "/>"
+      );
+    }
     if (run.mono) props.push('<w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/>');
     if (run.bold) props.push("<w:b/>");
     if (run.italic) props.push("<w:i/>");
@@ -210,7 +219,7 @@
     parts.push(headingXml("✅ 후속 할 일", 1));
     if (doc.actions.length) {
       doc.actions.forEach(function (item) {
-        var runs = [{ text: "☐ " }, { text: item.text }];
+        var runs = [{ text: "☐ ", font: "Segoe UI Symbol" }, { text: item.text }];
         var extra = [item.owner, item.due].filter(function (value) {
           return !!value;
         });
