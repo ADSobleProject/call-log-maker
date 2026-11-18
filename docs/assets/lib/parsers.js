@@ -216,12 +216,19 @@
         continue;
       }
 
-      // 4) '화자 1' / '화자 1: ...'
+      // 4) '화자 1' / '화자 1: ...' / '화자 1 (00:01)'
       var speakerLine = SPEAKER_LINE.exec(line);
       if (speakerLine) {
         var speaker = normalizeSpeaker(speakerLine.groups.spk);
         labelsUsed = true;
         var speakerBody = speakerLine.groups.text;
+        // 삼성 통화녹음은 화자 라벨 줄 끝에 상대 시각을 붙여 내보낸다
+        var speakerStamp = speakerBody.trim() ? parseTimestamp(speakerBody) : null;
+        if (speakerStamp !== null) {
+          pendingSpeaker = speaker;
+          pendingTime = speakerStamp;
+          continue;
+        }
         if (speakerBody.trim()) {
           add(speaker, pendingTime, speakerBody);
           pendingTime = null;

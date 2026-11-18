@@ -252,6 +252,164 @@
     return out;
   };
 
+  /* UTF-8 바이트 → 문자열. 올바른 UTF-8 이 아니면 null 을 돌려준다 (인코딩 자동 판별용). */
+  function decodeUtf8Strict(bytes) {
+    var out = "";
+    var i = 0;
+    var n = bytes.length;
+    while (i < n) {
+      var b = bytes[i];
+      var cp;
+      if (b < 0x80) {
+        cp = b;
+        i += 1;
+      } else if (b >= 0xc2 && b <= 0xdf) {
+        if (i + 1 >= n) return null;
+        if ((bytes[i + 1] & 0xc0) !== 0x80) return null;
+        cp = ((b & 0x1f) << 6) | (bytes[i + 1] & 0x3f);
+        i += 2;
+      } else if (b >= 0xe0 && b <= 0xef) {
+        if (i + 2 >= n) return null;
+        var b1 = bytes[i + 1];
+        var b2 = bytes[i + 2];
+        if ((b1 & 0xc0) !== 0x80 || (b2 & 0xc0) !== 0x80) return null;
+        if (b === 0xe0 && b1 < 0xa0) return null; // 너무 긴 표현(overlong)
+        if (b === 0xed && b1 >= 0xa0) return null; // 서로게이트 반쪽
+        cp = ((b & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f);
+        i += 3;
+      } else if (b >= 0xf0 && b <= 0xf4) {
+        if (i + 3 >= n) return null;
+        var c1 = bytes[i + 1];
+        var c2 = bytes[i + 2];
+        var c3 = bytes[i + 3];
+        if ((c1 & 0xc0) !== 0x80 || (c2 & 0xc0) !== 0x80 || (c3 & 0xc0) !== 0x80) return null;
+        if (b === 0xf0 && c1 < 0x90) return null;
+        if (b === 0xf4 && c1 >= 0x90) return null;
+        cp = ((b & 0x07) << 18) | ((c1 & 0x3f) << 12) | ((c2 & 0x3f) << 6) | (c3 & 0x3f);
+        i += 4;
+      } else {
+        return null;
+      }
+      if (cp > 0xffff) {
+        cp -= 0x10000;
+        out += String.fromCharCode(0xd800 + (cp >> 10), 0xdc00 + (cp & 0x3ff));
+      } else {
+        out += String.fromCharCode(cp);
+      }
+    }
+    return out;
+  }
+
+  /* UTF-16 바이트 → 문자열. BOM 은 이미 떼고 넘긴다. */
+  function decodeUtf16(bytes, bigEndian) {
+    if (bytes.length % 2) bytes = bytes.subarray(0, bytes.length - 1);
+    var pieces = [];
+    var units = [];
+    for (var i = 0; i < bytes.length; i += 2) {
+      units.push(bigEndian ? (bytes[i] << 8) | bytes[i + 1] : bytes[i] | (bytes[i + 1] << 8));
+      if (units.length >= 2048) {
+        pieces.push(String.fromCharCode.apply(null, units));
+        units = [];
+      }
+    }
+    if (units.length) pieces.push(String.fromCharCode.apply(null, units));
+    return pieces.join("");
+  }
+
+  /* 널바이트가 한쪽 바이트 자리에만 몰려 있으면 UTF-16 으로 본다.
+   * 화자 1 의 UTF-16LE = 54 D6 90 C7 20 00 31 00 처럼 홀수 자리에 0 이 온다. */
+  function guessUtf16(bytes) {
+    var limit = Math.min(bytes.length, 8192);
+    limit -= limit % 2;
+    if (limit < 16) return null;
+    var pairs = limit / 2;
+    var zerosEven = 0;
+    var zerosOdd = 0;
+    for (var i = 0; i < limit; i += 2) {
+      if (bytes[i] === 0) zerosEven += 1;
+      if (bytes[i + 1] === 0) zerosOdd += 1;
+    }
+    var min = Math.max(2, Math.ceil(pairs * 0.05));
+    if (zerosOdd >= min && zerosEven <= zerosOdd * 0.1) return "le";
+    if (zerosEven >= min && zerosOdd <= zerosEven * 0.1) return "be";
+    return null;
+  }
+
+  /* 디코딩 결과가 사람이 읽는 글인지 (제어문자·깨진 글자가 거의 없는지) */
+  function plausibleText(text) {
+    if (typeof text !== "string" || !text.length) return false;
+    var bad = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if (c === 0xfffd) {
+        bad += 1;
+      } else if (c < 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) {
+        bad += 1;
+      } else if (c >= 0xd800 && c <= 0xdbff) {
+        var next = text.charCodeAt(i + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) i += 1;
+        else bad += 1;
+      } else if (c >= 0xdc00 && c <= 0xdfff) {
+        bad += 1;
+      }
+    }
+    return bad <= text.length * 0.02;
+  }
+
+  function decodeEucKr(bytes) {
+    if (typeof TextDecoder === "undefined") return null;
+    try {
+      var text = new TextDecoder("euc-kr", { fatal: true }).decode(bytes);
+      return typeof text === "string" && text ? text : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /* 남은 BOM·널바이트 정리 */
+  function cleanText(text) {
+    var out = String(text == null ? "" : text);
+    while (out.charCodeAt(0) === 0xfeff) out = out.slice(1);
+    return out.replace(/\u0000/g, "").replace(/\ufeff/g, "");
+  }
+
+  /* .txt 파일 바이트 → 문자열.
+   * 삼성 통화녹음·음성녹음이 내보내는 UTF-16LE 파일을 UTF-8 로 읽어
+   * '화자 1' 이 'Tĭ 1' 처럼 깨지던 문제를 막는다.
+   *   1) BOM (FF FE / FE FF / EF BB BF)
+   *   2) BOM 이 없을 때 널바이트 배열로 UTF-16LE/BE 추정
+   *   3) UTF-8 → 4) EUC-KR → 5) 손실 UTF-8 */
+  function decodeTextBytes(bytes) {
+    var data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    var text = null;
+
+    if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
+      // FF FE 00 00 은 UTF-32LE 이므로 UTF-16 으로 보지 않는다
+      if (!(data.length >= 4 && data[2] === 0x00 && data[3] === 0x00)) {
+        text = decodeUtf16(data.subarray(2), false);
+      }
+    } else if (data.length >= 2 && data[0] === 0xfe && data[1] === 0xff) {
+      text = decodeUtf16(data.subarray(2), true);
+    } else if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
+      text = decodeUtf8Strict(data.subarray(3));
+      if (text === null) text = decodeUtf8Strict(data);
+    }
+
+    if (text === null) {
+      var order = guessUtf16(data);
+      if (order) {
+        var guessed = decodeUtf16(data, order === "be");
+        if (plausibleText(guessed)) text = guessed;
+      }
+    }
+
+    if (text === null) text = decodeUtf8Strict(data);
+    if (text === null) text = decodeEucKr(data);
+    if (text === null) text = new Utf8Decoder().decode(data);
+
+    return cleanText(text);
+  }
+
   function xmlEscape(text) {
     return String(text == null ? "" : text)
       // XML 1.0 에서 쓸 수 없는 제어 문자는 미리 지운다
@@ -284,6 +442,9 @@
     zip: zip,
     unzip: unzip,
     Utf8Decoder: Utf8Decoder,
+    decodeTextBytes: decodeTextBytes,
+    decodeUtf8Strict: decodeUtf8Strict,
+    guessUtf16: guessUtf16,
     xmlEscape: xmlEscape,
     pad2: pad2,
     groupDigits: groupDigits,

@@ -93,16 +93,8 @@
 
   /* ---------------------------------------------------------------- 입력 해석 */
   function decodeBytes(buffer) {
-    var bytes = new Uint8Array(buffer);
-    var decoders = ["utf-8", "euc-kr"];
-    for (var i = 0; i < decoders.length; i++) {
-      try {
-        return new TextDecoder(decoders[i], { fatal: true }).decode(bytes);
-      } catch (err) {
-        /* 다음 인코딩 시도 */
-      }
-    }
-    return new TextDecoder("utf-8").decode(bytes);
+    // UTF-16LE/BE(BOM 유무 모두) → UTF-8 → EUC-KR 순으로 판별한다 (lib/util.js)
+    return CallLog.util.decodeTextBytes(new Uint8Array(buffer));
   }
 
   function currentWhen() {

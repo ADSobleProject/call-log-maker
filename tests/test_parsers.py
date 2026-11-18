@@ -113,5 +113,72 @@ class ToleranceTest(unittest.TestCase):
             self.assertEqual(len(parsed.segments), 2)
 
 
+SAMSUNG_UTF16_TEXT = (
+    "AI 음성 인식\n"
+    "2026. 11. 17. 오후 2:31\n"
+    "길이 00:41\n"
+    "\n"
+    "화자 1 (00:01)\n"
+    "네, 안녕하세요. JFC 마케팅팀 김진혁입니다.\n"
+    "\n"
+    "화자 2 (00:14)\n"
+    "네 안녕하세요, 박동근입니다. 잘 지내셨어요?\n"
+    "\n"
+    "화자 1 (00:17)\n"
+    "네 덕분에 잘 지냅니다. 오늘 통화는 매장 오픈 건으로 드렸습니다.\n"
+)
+
+
+class EncodingTest(unittest.TestCase):
+    """삼성 통화녹음이 내보내는 UTF-16 .txt 를 제대로 읽는지."""
+
+    def _parse_bytes(self, data: bytes) -> "object":
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "통화 녹음 제이에프씨 박동근 부대표님_261117_143113_original.txt"
+            path.write_bytes(data)
+            return parse_text_file(path)
+
+    def _assert_clean(self, parsed, where: str) -> None:
+        self.assertEqual(parsed.speakers, ["화자 1", "화자 2"], where)
+        self.assertEqual(len(parsed.segments), 3, where)
+        self.assertEqual(parsed.segments[0].start, 1, where)
+        self.assertIn("JFC 마케팅팀 김진혁입니다", parsed.segments[0].text, where)
+        self.assertIn("박동근입니다", parsed.segments[1].text, where)
+        self.assertEqual(parsed.duration_sec, 41, where)
+        self.assertNotIn("\x00", parsed.full_text, where)
+        self.assertNotIn("\ufeff", parsed.full_text, where)
+
+    def test_utf16le_with_bom(self):
+        self._assert_clean(
+            self._parse_bytes(b"\xff\xfe" + SAMSUNG_UTF16_TEXT.encode("utf-16-le")),
+            "UTF-16LE+BOM",
+        )
+
+    def test_utf16be_with_bom(self):
+        self._assert_clean(
+            self._parse_bytes(b"\xfe\xff" + SAMSUNG_UTF16_TEXT.encode("utf-16-be")),
+            "UTF-16BE+BOM",
+        )
+
+    def test_utf16le_without_bom(self):
+        self._assert_clean(self._parse_bytes(SAMSUNG_UTF16_TEXT.encode("utf-16-le")), "UTF-16LE")
+
+    def test_utf16be_without_bom(self):
+        self._assert_clean(self._parse_bytes(SAMSUNG_UTF16_TEXT.encode("utf-16-be")), "UTF-16BE")
+
+    def test_utf8_and_utf8_bom_still_work(self):
+        self._assert_clean(self._parse_bytes(SAMSUNG_UTF16_TEXT.encode("utf-8")), "UTF-8")
+        self._assert_clean(self._parse_bytes(b"\xef\xbb\xbf" + SAMSUNG_UTF16_TEXT.encode("utf-8")), "UTF-8+BOM")
+
+    def test_utf16_korean_only_without_ascii(self):
+        """타임스탬프·공백 없이 한글만 이어진 UTF-16 도 깨지지 않아야 한다."""
+        text = "화자 1: 안녕하세요\n화자 2: 네 안녕하세요\n"
+        for encoding in ("utf-16-le", "utf-16-be"):
+            with self.subTest(encoding=encoding):
+                parsed = self._parse_bytes(text.encode(encoding))
+                self.assertIn("안녕하세요", parsed.full_text)
+                self.assertEqual(parsed.speakers, ["화자 1", "화자 2"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -102,13 +102,19 @@ class WebAppTest(unittest.TestCase):
         scripts = re.findall(r'<script[^>]+src="([^"]+)"', html)
         styles = re.findall(r'<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"', html)
         self.assertTrue(scripts, "스크립트 연결이 없습니다")
+        versions = set()
         for ref in scripts + styles:
             self.assertFalse(
                 ref.startswith(("http://", "https://", "//")),
                 f"바깥 자원을 쓰면 오프라인에서 깨집니다: {ref}",
             )
-            self.assertTrue((DOCS / ref).exists(), f"연결된 파일이 없습니다: {ref}")
-            self.assertFalse(ref.endswith(".mjs"), "file:// 로 열 때 모듈 스크립트는 막힙니다")
+            # 캐시를 비우려고 붙인 ?v=2 는 파일 경로가 아니다
+            path = ref.split("?")[0].split("#")[0]
+            self.assertTrue((DOCS / path).exists(), f"연결된 파일이 없습니다: {ref}")
+            self.assertFalse(path.endswith(".mjs"), "file:// 로 열 때 모듈 스크립트는 막힙니다")
+            if "?" in ref:
+                versions.add(ref.split("?", 1)[1])
+        self.assertLessEqual(len(versions), 1, f"자원마다 캐시 버전이 다릅니다: {sorted(versions)}")
 
         self.assertNotIn('type="module"', html, "모듈 스크립트는 file:// 에서 동작하지 않습니다")
         self.assertIn('id="text"', html)

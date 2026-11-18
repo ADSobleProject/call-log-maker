@@ -258,6 +258,58 @@
     var empty = CallLog.parsers.parseText("   \n\n  ", "");
     eq(empty.segments.length, 0, "빈 글: 발화 없음");
     eq(empty.warnings.length, 1, "빈 글: 경고 1건");
+
+    // 삼성 통화녹음: '화자 1 (00:01)' 처럼 라벨 줄 끝에 시각이 붙는 형태
+    var stamped = CallLog.parsers.parseText(
+      "화자 1 (00:01)\n네, 안녕하세요. JFC 마케팅팀 김진혁입니다.\n\n화자 2 (00:14)\n네 안녕하세요, 박동근입니다.",
+      ""
+    );
+    eq(stamped.segments.length, 2, "라벨+시각: 발화 수");
+    eq(stamped.segments[0].speaker, "화자 1", "라벨+시각: 화자");
+    eq(stamped.segments[0].start, 1, "라벨+시각: 시각 인식");
+    eq(stamped.segments[0].text, "네, 안녕하세요. JFC 마케팅팀 김진혁입니다.", "라벨+시각: 시각이 본문에 남지 않음");
+    eq(stamped.segments[1].start, 14, "라벨+시각: 두 번째 시각");
+  })();
+
+  /* ================================================================ 인코딩 */
+  (function testDecodeTextBytes() {
+    function utf16Bytes(str, bigEndian) {
+      var bytes = [];
+      for (var i = 0; i < str.length; i++) {
+        var code = str.charCodeAt(i);
+        if (bigEndian) bytes.push((code >> 8) & 0xff, code & 0xff);
+        else bytes.push(code & 0xff, (code >> 8) & 0xff);
+      }
+      return bytes;
+    }
+    function withPrefix(prefix, bytes) {
+      return new Uint8Array(prefix.concat(bytes));
+    }
+    function decode(bytes) {
+      return CallLog.util.decodeTextBytes(new Uint8Array(bytes));
+    }
+
+    var sample = "AI 음성 인식\n2026. 11. 17. 오후 2:31\n길이 00:41\n\n화자 1 (00:01)\n네, 안녕하세요. JFC 마케팅팀 김진혁입니다.\n\n화자 2 (00:14)\n네 안녕하세요, 박동근입니다.";
+    var le = utf16Bytes(sample, false);
+    var be = utf16Bytes(sample, true);
+
+    eq(decode([0xff, 0xfe].concat(le)), sample, "인코딩: UTF-16LE + BOM");
+    eq(decode([0xfe, 0xff].concat(be)), sample, "인코딩: UTF-16BE + BOM");
+    eq(decode(le), sample, "인코딩: UTF-16LE (BOM 없음)");
+    eq(decode(be), sample, "인코딩: UTF-16BE (BOM 없음)");
+    eq(decode(CallLog.util.utf8Encode(sample)), sample, "인코딩: UTF-8");
+    eq(decode([0xef, 0xbb, 0xbf].concat(Array.prototype.slice.call(CallLog.util.utf8Encode(sample)))), sample, "인코딩: UTF-8 + BOM");
+
+    // 녹음 앱이 섞어 넣는 널바이트는 결과에 남지 않아야 한다
+    eq(decode([0xff, 0xfe].concat(le, [0x00, 0x00])).indexOf("\u0000") < 0, true, "인코딩: 널바이트 제거");
+    eq(decode([0xff, 0xfe].concat(le)).charCodeAt(0), "A".charCodeAt(0), "인코딩: BOM 이 본문에 남지 않음");
+    eq(decode([]), "", "인코딩: 빈 파일");
+
+    // ASCII 위주 UTF-16LE 를 UTF-8 로 잘못 읽으면 나오던 깨진 글자(Tĭ 1 …)가 없어야 한다
+    var asciiLe = utf16Bytes("화자 1 (00:01)\nhello", false);
+    var fixed = decode(asciiLe);
+    eq(fixed.indexOf("화자 1 (00:01)") >= 0, true, "인코딩: 한국어+ASCII 혼합 UTF-16LE");
+    eq(fixed.indexOf("\u0590") < 0, true, "인코딩: 깨진 문자 없음");
   })();
 
   /* ================================================================ 분석 */

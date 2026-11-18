@@ -165,13 +165,60 @@ def parse_text_file(path: str | Path) -> ParsedText:
 
 
 def _read_text(path: Path) -> str:
-    data = path.read_bytes()
-    for encoding in ("utf-8-sig", "utf-8", "cp949", "euc-kr", "utf-16"):
+    return _decode_text_bytes(path.read_bytes())
+
+
+def _guess_utf16(data: bytes) -> str | None:
+    """널바이트가 한쪽 바이트 자리에만 몰려 있으면 UTF-16 으로 본다.
+
+    화자 1 의 UTF-16LE = 54 D6 90 C7 20 00 31 00 처럼 홀수 자리에 0 이 온다.
+    """
+    sample = data[:8192]
+    sample = sample[: len(sample) - len(sample) % 2]
+    if len(sample) < 16:
+        return None
+    pairs = len(sample) // 2
+    zeros_even = sum(1 for i in range(0, len(sample), 2) if sample[i] == 0)
+    zeros_odd = sum(1 for i in range(1, len(sample), 2) if sample[i] == 0)
+    minimum = max(2, -(-pairs * 5 // 100))
+    if zeros_odd >= minimum and zeros_even <= zeros_odd * 0.1:
+        return "utf-16-le"
+    if zeros_even >= minimum and zeros_odd <= zeros_even * 0.1:
+        return "utf-16-be"
+    return None
+
+
+def _decode_text_bytes(data: bytes) -> str:
+    """텍스트 파일 바이트 → 문자열.
+
+    삼성 통화녹음·음성녹음이 내보내는 UTF-16LE 파일을 cp949 로 읽어
+    '화자 1' 이 'Tĭ 1' 처럼 깨지던 문제를 막는다.
+    BOM → (BOM 이 없으면) 널바이트 배열 → UTF-8 → CP949/EUC-KR → 손실 UTF-8 순.
+    """
+    if not data:
+        return ""
+
+    if data.startswith(b"\xff\xfe") and not data.startswith(b"\xff\xfe\x00\x00"):
+        order = ["utf-16"]  # BOM 이 있으면 바이트 순서를 알아서 잡는다
+    elif data.startswith(b"\xfe\xff"):
+        order = ["utf-16"]
+    elif data.startswith(b"\xef\xbb\xbf"):
+        order = ["utf-8-sig", "utf-8"]
+    else:
+        guessed = _guess_utf16(data)
+        order = ([guessed, "utf-16"] if guessed else []) + ["utf-8", "cp949", "euc-kr"]
+
+    text = None
+    for encoding in order:
         try:
-            return data.decode(encoding)
-        except UnicodeDecodeError:
+            text = data.decode(encoding)
+            break
+        except (UnicodeDecodeError, UnicodeError):
             continue
-    return data.decode("utf-8", errors="replace")
+    if text is None:
+        text = data.decode("utf-8", errors="replace")
+
+    return text.replace("\ufeff", "").replace("\x00", "")
 
 
 def parse_text(raw: str, source_name: str = "") -> ParsedText:
@@ -270,12 +317,18 @@ def parse_text(raw: str, source_name: str = "") -> ParsedText:
                 pending_speaker = speaker
             continue
 
-        # 4) '화자 1' / '화자 1: ...'
+        # 4) '화자 1' / '화자 1: ...' / '화자 1 (00:01)'
         speaker_line = _SPEAKER_LINE.match(line)
         if speaker_line:
             speaker = normalize_speaker(speaker_line.group("spk"))
             labels_used = True
             body = speaker_line.group("text")
+            stamp = parse_timestamp(body) if body.strip() else None
+            if stamp is not None:
+                # 삼성 통화녹음은 화자 라벨 줄 끝에 상대 시각을 붙여 내보낸다
+                pending_speaker = speaker
+                pending_time = stamp
+                continue
             if body.strip():
                 add(speaker, pending_time, body)
                 pending_time = None
