@@ -66,6 +66,20 @@ PC 없이 휴대폰 브라우저에서 바로 씁니다. 삼성 “음성녹음�
 
 > 웹앱은 **텍스트(.txt)** 만 다룹니다. 녹음 파일(.m4a)을 글자로 옮기는 음성인식은 PC 버전에서 하세요.
 
+### 📲 다른 앱에서 바로 보내기 (안드로이드 공유 메뉴)
+
+홈 화면에 **앱으로 설치**한 뒤에는, 통화 녹음·메시지·파일 앱에서 **공유 → 통화록 변환기**를 누르면
+`.txt` 파일이나 고른 글이 앱으로 바로 넘어와 통화록이 만들어진다.
+
+| 항목 | 내용 |
+| --- | --- |
+| 어떻게 | 매니페스트의 `share_target` — `POST ./share-target`(multipart/form-data) |
+| 넘길 수 있는 것 | `.txt`/`text/plain` 파일, 고른 글(text), 링크(url) |
+| 처리 | 서비스 워커가 요청을 가로채 임시 캐시(`call-log-maker-share`)에 담고 `./?shared=1` 로 303 되돌림 → 화면이 바로 변환 |
+| 지움 | 앱이 한 번 읽으면 임시 캐시에서 바로 삭제 (기기에 통화 내용이 남지 않음) |
+| 안 되는 것 | 음성 파일(`.m4a`)은 브라우저에서 글자로 옮길 수 없어 안내만 띄운다 — 삼성 녹음 앱에서 **텍스트(.txt)로 변환한 뒤 공유**하거나 PC 버전을 쓰면 된다 |
+| 조건 | 크롬(안드로이드)에서 **홈 화면에 앱으로 설치한 상태**여야 공유 시트에 뜬다. iOS 사파리는 `share_target` 을 지원하지 않는다 |
+
 ---
 
 ## 🖱️ 세 가지 실행 방법
@@ -241,8 +255,8 @@ calllog/
   watcher.py     폴더 감시
 docs/            휴대폰 웹앱 (GitHub Pages 로 그대로 배포 · 빌드 없음)
   index.html     화면
-  manifest.json  PWA 매니페스트 — 홈 화면에 앱으로 설치
-  sw.js          서비스 워커 (네트워크 우선 · 오프라인 셸 캐시 'call-log-maker-v1')
+  manifest.json  PWA 매니페스트 — 홈 화면에 앱으로 설치 · 안드로이드 공유 메뉴(share_target)
+  sw.js          서비스 워커 (네트워크 우선 · 오프라인 셸 캐시 'call-log-maker-v2' · POST ./share-target 처리)
   icons/         앱 아이콘 (icon.svg · 192 · 512 · maskable · 애플 180)
   assets/app.js  화면 조작 — 입력창은 다시 그리지 않는다(한글 조합 보호)
   assets/lib/    util.js(zip·crc32) · filenames.js · parsers.js · analyze.js · render.js · docx.js · build.js
@@ -250,10 +264,12 @@ docs/            휴대폰 웹앱 (GitHub Pages 로 그대로 배포 · 빌드 �
 setup_env.py     환경 준비(.venv 생성·복구, 필수→선택 패키지 순서 설치)
 requirements.txt        필수: python-docx
 requirements-audio.txt  선택: faster-whisper + av<19 (음성 변환, PyAV 19 는 faster-whisper 와 비호환)
-tests/           170개 자동화 테스트 (웹앱 JS · PWA 테스트 포함)
+tests/           190개 자동화 테스트 (웹앱 JS · PWA · 공유 메뉴 테스트 포함)
   test_pwa.py           매니페스트·아이콘·서비스 워커 검사
+  test_share_target.py  공유 메뉴: 매니페스트 스키마 · POST 가로채기 · ?shared=1 화면 처리
   web/run_js_tests.js   브라우저 없이 도는 JS 테스트 (Node 또는 quickjs)
   web/dom_stub.js       app.js 화면 점검용 최소 DOM
+  web/sw_stub.js        sw.js 점검용 서비스 워커 흉내 (Response·caches·URL)
 samples/         예시 txt 3종
 ```
 
@@ -279,5 +295,6 @@ python -m calllog batch --config 내설정.json
 - 모든 처리는 내 PC에서만 이루어집니다. 녹음 파일·결과물이 서버로 전송되지 않습니다.
 - 휴대폰 웹앱(`docs/`)도 서버가 없습니다. 고른 파일은 브라우저 메모리에서만 읽고, 아무 곳에도 저장·전송하지 않습니다
   (입력 내용을 브라우저 저장소에도 남기지 않습니다).
+- 공유 메뉴로 받은 내용은 **임시 캐시(`call-log-maker-share`)에 잠시만** 담고, 앱이 한 번 읽으면 바로 지웁니다(변환 후 남지 않음).
 - 모델 최초 다운로드 때만 Hugging Face에 접속합니다.
 - `input/`, `output/`, `processed/` 내용은 `.gitignore` 로 제외되어 GitHub에 올라가지 않습니다.

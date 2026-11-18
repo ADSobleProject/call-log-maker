@@ -50,9 +50,11 @@
 
   var elements = {};
   ["file", "file-hint", "text", "title", "date", "time", "preview", "status",
-    "clear", "copy", "save-md", "save-docx", "share", "example"].forEach(function (id) {
+    "notice", "clear", "copy", "save-md", "save-docx", "share", "example"].forEach(function (id) {
     elements[id] = makeElement(id);
   });
+  // index.html 의 안내 띠는 hidden 속성으로 시작한다
+  elements.notice.hidden = true;
 
   var body = makeElement("body");
 
@@ -73,7 +75,18 @@
 
   root.window = root;
   root.navigator = {};
-  root.location = { search: "" };
+  root.location = {
+    search: "",
+    pathname: "/call-log-maker/",
+    hash: "",
+    href: "https://example.test/call-log-maker/",
+    origin: "https://example.test",
+  };
+  root.history = {
+    replaceState: function (state, title, url) {
+      root.__replacedUrl = url;
+    },
+  };
   root.URL = {
     createObjectURL: function () {
       return "blob:stub";
@@ -121,6 +134,85 @@
   };
   root.fetch = function () {
     return Promise.reject(new Error("fetch 는 이 테스트에서 쓰지 않습니다"));
+  };
+
+  /* Cache API 흉내 — app.js 가 공유받은 내용을 꺼내는지 보려면 필요하다.
+   * (실제 저장은 sw.js 가 하고, 여기서는 미리 담아 둔 상태를 만들어 준다) */
+  var cacheStores = {};
+
+  function cacheKeyName(key) {
+    return String((key && key.url) || key || "");
+  }
+
+  function makeCachedResponse(entry) {
+    return {
+      ok: true,
+      headers: entry.headers || {},
+      text: function () {
+        return Promise.resolve(entry.body == null ? "" : String(entry.body));
+      },
+      arrayBuffer: function () {
+        return Promise.resolve(entry.buffer || new ArrayBuffer(0));
+      },
+    };
+  }
+
+  function makeCache(name) {
+    var store = cacheStores[name] || (cacheStores[name] = {});
+    return {
+      put: function (key, response) {
+        store[cacheKeyName(key)] = response;
+        return Promise.resolve();
+      },
+      match: function (key) {
+        var entry = store[cacheKeyName(key)];
+        return Promise.resolve(entry ? makeCachedResponse(entry) : undefined);
+      },
+      delete: function (key) {
+        var key2 = cacheKeyName(key);
+        var had = Object.prototype.hasOwnProperty.call(store, key2);
+        delete store[key2];
+        return Promise.resolve(had);
+      },
+      keys: function () {
+        return Promise.resolve(Object.keys(store).map(function (key) {
+          return { url: key };
+        }));
+      },
+    };
+  }
+
+  root.caches = {
+    open: function (name) {
+      return Promise.resolve(makeCache(name));
+    },
+    delete: function (name) {
+      var had = Object.prototype.hasOwnProperty.call(cacheStores, name);
+      delete cacheStores[name];
+      return Promise.resolve(had);
+    },
+    keys: function () {
+      return Promise.resolve(Object.keys(cacheStores));
+    },
+    match: function () {
+      return Promise.resolve(undefined);
+    },
+  };
+
+  root.__caches = {
+    stores: cacheStores,
+    seed: function (cacheName, entryName, entry) {
+      var store = cacheStores[cacheName] || (cacheStores[cacheName] = {});
+      store[entryName] = entry;
+    },
+    keys: function (cacheName) {
+      return Object.keys(cacheStores[cacheName] || {});
+    },
+    clear: function () {
+      Object.keys(cacheStores).forEach(function (name) {
+        delete cacheStores[name];
+      });
+    },
   };
 
   root.__dom = {

@@ -13,6 +13,22 @@
   "background_color": "#f4f6fb",
   "theme_color": "#1f2a44",
   "categories": ["productivity", "utilities"],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "files",
+          "accept": ["text/plain", ".txt", "audio/*", ".m4a"]
+        }
+      ]
+    }
+  },
   "icons": [
     {
       "src": "./icons/icon.svg",

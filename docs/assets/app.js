@@ -21,6 +21,7 @@
     time: document.getElementById("time"),
     preview: document.getElementById("preview"),
     status: document.getElementById("status"),
+    notice: document.getElementById("notice"),
     clear: document.getElementById("clear"),
     copy: document.getElementById("copy"),
     saveMd: document.getElementById("save-md"),
@@ -43,6 +44,26 @@
   /* ---------------------------------------------------------------- 도구 */
   function pad2(n) {
     return (n < 10 ? "0" : "") + n;
+  }
+
+  function noop() {}
+
+  /* 주소의 물음표 값 하나를 읽는다 (?shared=1 · ?example=1) */
+  function queryParam(name) {
+    try {
+      if (typeof URLSearchParams === "function") {
+        return new URLSearchParams(location.search || "").get(name);
+      }
+    } catch (err) {
+      // URLSearchParams 를 쓰지 못하는 환경은 아래 대체 경로로
+    }
+    var match = new RegExp("[?&]" + name + "=([^&#]*)").exec(location.search || "");
+    if (!match) return null;
+    try {
+      return decodeURIComponent(match[1].replace(/\+/g, " "));
+    } catch (err) {
+      return match[1];
+    }
   }
 
   function dateInputValue(date) {
@@ -89,6 +110,23 @@
       button.textContent = original;
       button.classList.remove("done");
     }, 1400);
+  }
+
+  /* 화면 위쪽 안내 띠 — 토스트와 달리 읽을 시간이 필요한 안내에 쓴다 */
+  function showNotice(message, kind) {
+    if (!el.notice) {
+      toast(message);
+      return;
+    }
+    el.notice.textContent = message;
+    el.notice.className = kind ? "notice " + kind : "notice";
+    el.notice.hidden = false;
+  }
+
+  function hideNotice() {
+    if (!el.notice) return;
+    el.notice.hidden = true;
+    el.notice.textContent = "";
   }
 
   /* ---------------------------------------------------------------- 입력 해석 */
@@ -174,25 +212,35 @@
   }
 
   /* ---------------------------------------------------------------- 파일 */
+  /* 새 내용(파일·공유)을 입력창에 넣는다 — 사용자가 친 값은 이때만 갱신한다 */
+  function applyText(text, fileName, modifiedAt, hintText) {
+    state.fileName = fileName || "";
+    state.modifiedAt = modifiedAt || null;
+    state.titleTouched = false;
+    state.whenTouched = false;
+    el.text.value = text;
+    el.title.value = "";
+    el.date.value = "";
+    el.time.value = "";
+    el.fileHint.textContent = hintText;
+    hideNotice();
+    render();
+    el.preview.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function applyFile(file, asExample) {
     if (!file) return;
     var reader = new FileReader();
     reader.onload = function () {
       var text = decodeBytes(reader.result);
-      state.fileName = asExample ? "" : file.name || "";
-      state.modifiedAt = file.lastModified ? new Date(file.lastModified) : null;
-      state.titleTouched = false;
-      state.whenTouched = false;
-      // 파일을 새로 고를 때만 입력값을 갱신한다 (타이핑 중에는 건드리지 않음)
-      el.text.value = text;
-      el.title.value = "";
-      el.date.value = "";
-      el.time.value = "";
-      el.fileHint.textContent = state.fileName
-        ? "📄 " + state.fileName + " 불러왔어요."
-        : "예시 내용을 채웠어요.";
-      render();
-      el.preview.scrollIntoView({ behavior: "smooth", block: "start" });
+      applyText(
+        text,
+        asExample ? "" : file.name || "",
+        file.lastModified ? new Date(file.lastModified) : null,
+        asExample
+          ? "예시 내용을 채웠어요."
+          : "📄 " + (file.name || "") + " 불러왔어요."
+      );
     };
     reader.onerror = function () {
       el.fileHint.textContent = "파일을 읽지 못했어요. 다른 방법으로 붙여넣어 주세요.";
@@ -250,6 +298,7 @@
     el.time.value = "";
     el.file.value = "";
     el.fileHint.textContent = "삼성 “음성녹음” 앱 → 녹음 선택 → 공유/저장 → 텍스트(.txt)";
+    hideNotice();
     render();
     el.text.focus();
   });
@@ -390,12 +439,196 @@
 
   if (el.example) el.example.addEventListener("click", loadExample);
 
+  /* ---------------------------------------------------------------- 공유 메뉴로 받기
+   * 안드로이드 공유 메뉴(공유 → 통화록 변환기)로 들어온 내용은 sw.js 가
+   * POST ./share-target 을 가로채 임시 캐시에 담아 두고 ./?shared=1 로 되돌려 보낸다.
+   * 여기서 그 내용을 꺼내 입력창을 채우고, 읽은 뒤에는 캐시를 지운다. */
+  var SHARE_CACHE = "call-log-maker-share";
+  var SHARE_META = "__shared.json";
+  var SHARE_FILE = "__shared.bin";
+
+  function shareKey(name) {
+    try {
+      return new URL("./" + name, location.href).href;
+    } catch (err) {
+      return "./" + name;
+    }
+  }
+
+  /* 주소창에서 ?shared=1 을 지워 새로고침해도 같은 공유를 다시 읽지 않게 한다 */
+  function cleanSharedUrl() {
+    try {
+      if (window.history && window.history.replaceState) {
+        var rest = "";
+        var query = String(location.search || "").replace(/^\?/, "").split("&");
+        query = query.filter(function (pair) {
+          return pair && pair.split("=")[0] !== "shared";
+        });
+        if (query.length) rest = "?" + query.join("&");
+        window.history.replaceState(null, "", location.pathname + rest + (location.hash || ""));
+      }
+    } catch (err) {
+      // 주소를 못 고쳐도 변환에는 지장이 없다
+    }
+  }
+
+  /* 정해진 키로 먼저 찾고, 없으면 캐시 안에서 파일 이름으로 한 번 더 훑는다 */
+  function findShared(cache, key, name) {
+    return Promise.resolve(cache.match(key)).then(function (hit) {
+      if (hit) return hit;
+      if (!cache.keys) return null;
+      return Promise.resolve(cache.keys()).then(function (requests) {
+        for (var i = 0; i < requests.length; i++) {
+          var href = String((requests[i] && requests[i].url) || requests[i] || "");
+          if (href.split("?")[0].slice(-name.length) === name) return cache.match(href);
+        }
+        return null;
+      });
+    }).catch(function () {
+      return null;
+    });
+  }
+
+  /* 평소에 앱을 열었을 때 — 공유받은 채로 남은 임시 캐시를 지운다.
+   * (통화 내용이 브라우저 저장소에 남지 않게. 읽고 지우는 것이 기본이고, 이게 마지막 안전장치) */
+  function clearSharedCache() {
+    if (typeof caches === "undefined" || !caches.delete) return Promise.resolve(false);
+    try {
+      return Promise.resolve(caches.delete(SHARE_CACHE)).catch(noop);
+    } catch (err) {
+      return Promise.resolve(false);
+    }
+  }
+
+  function dropShared(cache) {
+    var names = [SHARE_META, SHARE_FILE];
+    try {
+      Promise.resolve(cache.delete(shareKey(SHARE_META))).catch(noop);
+      Promise.resolve(cache.delete(shareKey(SHARE_FILE))).catch(noop);
+      // 키 모양이 어긋난 경우(주소가 달라진 설치본 등)까지 쓸어 둔다
+      if (cache.keys) {
+        Promise.resolve(cache.keys()).then(function (requests) {
+          (requests || []).forEach(function (request) {
+            var href = String((request && request.url) || request || "");
+            var path = href.split("?")[0];
+            for (var i = 0; i < names.length; i++) {
+              if (path.slice(-names[i].length) === names[i]) {
+                Promise.resolve(cache.delete(href)).catch(noop);
+                break;
+              }
+            }
+          });
+        }).catch(noop);
+      }
+    } catch (err) {
+      // 지우지 못해도 다음 공유가 덮어쓴다
+    }
+  }
+
+  function applyShared(meta, buffer) {
+    if (!meta) {
+      showNotice("공유받은 내용을 읽지 못했어요. .txt 파일을 직접 골라 주세요.", "warn");
+      return false;
+    }
+
+    // 음성 파일(.m4a 등)은 브라우저에서 글자로 옮길 수 없다 — 방법을 알려 준다
+    if (meta.isAudio) {
+      showNotice(
+        "음성 파일(" + (meta.fileName || ".m4a") + ")은 브라우저에서 바로 변환할 수 없어요. " +
+          "삼성 “음성녹음” 앱에서 텍스트(.txt)로 변환한 뒤 공유하거나 PC 버전을 이용해 주세요.",
+        "warn"
+      );
+      toast("음성 파일은 .txt 로 변환해서 공유해 주세요");
+      return false;
+    }
+
+    var fileName = String(meta.fileName || "");
+    var modifiedAt = meta.modifiedAt ? new Date(meta.modifiedAt) : null;
+
+    if (buffer && buffer.byteLength) {
+      applyText(decodeBytes(buffer), fileName, modifiedAt, "📄 " + fileName + " 공유받았어요.");
+      toast("공유받은 파일을 통화록으로 만들었어요");
+      return true;
+    }
+
+    if (fileName && meta.error) {
+      showNotice("공유받은 파일(" + fileName + ")을 읽지 못했어요. 파일을 직접 골라 주세요.", "warn");
+      return false;
+    }
+
+    var body = String(meta.text || "");
+    if (!body.trim() && meta.title) body = String(meta.title);
+    if (!body.trim()) {
+      showNotice("공유받은 내용이 비어 있어요. .txt 파일이나 대화 내용을 공유해 주세요.", "warn");
+      return false;
+    }
+
+    applyText(body, "", null, "공유받은 내용을 채웠어요.");
+    toast("공유받은 내용으로 통화록을 만들었어요");
+    return true;
+  }
+
+  function consumeShared() {
+    cleanSharedUrl();
+    if (typeof caches === "undefined" || !caches.open) {
+      showNotice("이 브라우저에서는 공유받은 내용을 읽을 수 없어요. 파일을 직접 골라 주세요.", "warn");
+      return Promise.resolve(false);
+    }
+
+    var metaKey = shareKey(SHARE_META);
+    var fileKey = shareKey(SHARE_FILE);
+
+    return Promise.resolve(caches.open(SHARE_CACHE)).then(function (cache) {
+      return findShared(cache, metaKey, SHARE_META).then(function (hit) {
+        if (!hit) {
+          dropShared(cache);
+          showNotice(
+            "공유받은 내용을 찾지 못했어요. 앱을 한 번 연 뒤 다시 공유하거나, .txt 파일을 직접 골라 주세요.",
+            "warn"
+          );
+          return false;
+        }
+        return Promise.resolve(hit.text()).then(function (raw) {
+          var meta = null;
+          try {
+            meta = JSON.parse(raw);
+          } catch (err) {
+            meta = null;
+          }
+          return findShared(cache, fileKey, SHARE_FILE).then(function (fileHit) {
+            if (!fileHit || !fileHit.arrayBuffer) return applyShared(meta, null);
+            return Promise.resolve(fileHit.arrayBuffer()).then(function (bytes) {
+              return applyShared(meta, bytes);
+            }, function () {
+              return applyShared(meta, null);
+            });
+          });
+        }).then(function (done) {
+          dropShared(cache);
+          return done;
+        });
+      });
+    }).catch(function () {
+      showNotice("공유받은 내용을 읽지 못했어요. 파일을 직접 골라 주세요.", "warn");
+      return false;
+    });
+  }
+
   /* ---------------------------------------------------------------- 시작 */
   if (canShareFiles()) el.share.hidden = false;
   render();
 
-  // 주소 끝에 ?example=1 로 열면 예시 내용이 채워진 상태로 시작한다 (안내용)
-  if (/[?&]example=1/.test(location.search)) loadExample();
+  // 공유 메뉴로 넘어온 경우(?shared=1)에는 그 내용을 먼저 채운다
+  if (queryParam("shared") === "1") {
+    consumeShared();
+  } else {
+    // 평소 실행이면 지난번 공유가 남긴 임시 내용을 지운다
+    clearSharedCache();
+    if (/[?&]example=1/.test(location.search)) {
+      // 주소 끝에 ?example=1 로 열면 예시 내용이 채워진 상태로 시작한다 (안내용)
+      loadExample();
+    }
+  }
 
   // 앱이 화면에 돌아올 때 상태를 잃지 않게 입력값을 localStorage 에 보관하지는 않는다.
   // (통화 내용이 기기 브라우저 저장소에 남지 않도록)

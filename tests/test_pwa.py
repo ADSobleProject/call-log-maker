@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 MANIFEST = DOCS / "manifest.json"
 ICONS = DOCS / "icons"
-CACHE_NAME = "call-log-maker-v1"
+CACHE_NAME = "call-log-maker-v2"
 
 
 def _png_size(path: Path) -> tuple[int, int]:
@@ -154,7 +154,7 @@ class PwaTest(unittest.TestCase):
             self.assertIn(f"./{ref}", shell, f"sw.js 셸 목록에 페이지 자원이 빠졌습니다: {ref}")
 
         versions = {ref.split("?")[1] for ref in page_refs if "?" in ref}
-        self.assertEqual(versions, {"v=3"}, f"페이지 자원의 캐시 버전이 하나가 아닙니다: {sorted(versions)}")
+        self.assertEqual(versions, {"v=4"}, f"페이지 자원의 캐시 버전이 하나가 아닙니다: {sorted(versions)}")
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -247,4 +247,19 @@ textarea:focus, input:focus {
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+/* 공유 메뉴로 받은 내용 안내 띠 — 읽을 시간이 필요한 안내에 쓴다 */
+.notice {
+  background: var(--accent-soft);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.notice.warn { border-left-color: #b4442e; }
+.notice[hidden] { display: none; }
+
 .row-actions { display: flex; gap: 2px; flex: none; }
