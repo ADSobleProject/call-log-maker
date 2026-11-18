@@ -104,8 +104,12 @@ class ManifestShareTargetTest(unittest.TestCase):
         entry = files[0]
         self.assertEqual(entry["name"], "files")
         self.assertIsInstance(entry["accept"], list)
-        for needed in ("text/plain", ".txt", "audio/*", ".m4a"):
+        # 삼성 음성녹음은 .txt 를 text/plain 으로도, application/octet-stream 으로도 넘긴다
+        for needed in ("text/plain", "text/*", ".txt", "application/octet-stream", "audio/*", ".m4a"):
             self.assertIn(needed, entry["accept"], f"accept 에 {needed} 가 없습니다")
+        self.assertEqual(
+            len(entry["accept"]), len(set(entry["accept"])), "accept 에 같은 값이 두 번 들어갔습니다"
+        )
 
     def test_page_has_notice_and_share_hint(self):
         html = (DOCS / "index.html").read_text(encoding="utf-8")
@@ -147,7 +151,7 @@ class ServiceWorkerShareTargetTest(unittest.TestCase):
             self.assertIn(hook, names)
 
     def test_share_target_redirects_to_app(self):
-        for scenario in ("textFile", "textOnly", "audioFile", "utf16File"):
+        for scenario in ("textFile", "textOnly", "audioFile", "utf16File", "octetStreamFile", "octetStreamAudio"):
             with self.subTest(scenario=scenario):
                 result = self.results[scenario]
                 self.assertTrue(result["respondWithCalled"], f"{scenario}: 공유 요청을 가로채지 않았습니다")
@@ -186,6 +190,27 @@ class ServiceWorkerShareTargetTest(unittest.TestCase):
         self.assertTrue(meta["isAudio"], "음성 파일은 isAudio 로 알려야 합니다")
         self.assertEqual(meta["fileName"], "통화 녹음 김지훈_261117_210000.m4a")
         self.assertIsNone(result["fileHex"], "음성 파일 바이트는 담지 않아야 합니다(용량·의미 없음)")
+        self.assertEqual(result["cacheKeys"], [META_KEY])
+
+    def test_octet_stream_text_file_is_stored(self):
+        """삼성 음성녹음이 .txt 를 application/octet-stream 으로 넘겨도 글로 처리해야 한다."""
+        result = self.results["octetStreamFile"]
+        meta = result["meta"]
+        self.assertIsNotNone(meta, "공유 메타가 캐시에 없습니다")
+        self.assertFalse(meta["isAudio"], "application/octet-stream .txt 를 음성 파일로 오해했습니다")
+        self.assertEqual(meta["fileName"], "음성 녹음 김지훈_261117_210000.txt")
+        self.assertEqual(meta["fileType"], "application/octet-stream")
+        self.assertEqual(
+            result["fileHex"],
+            _hex(SAMPLE_TEXT.encode("utf-8")),
+            "형식이 application/octet-stream 이어도 파일 바이트를 담아야 합니다",
+        )
+
+    def test_octet_stream_audio_extension_is_guided(self):
+        """형식이 application/octet-stream 이어도 이름이 .m4a 면 음성 안내로 보낸다."""
+        result = self.results["octetStreamAudio"]
+        self.assertTrue(result["meta"]["isAudio"], ".m4a 는 음성 파일로 알려야 합니다")
+        self.assertIsNone(result["fileHex"], "음성 파일 바이트는 담지 않아야 합니다")
         self.assertEqual(result["cacheKeys"], [META_KEY])
 
     def test_other_post_is_not_intercepted(self):
@@ -260,6 +285,20 @@ class SharedPageTest(unittest.TestCase):
         self.assertEqual(before["text"], UTF16_TEXT, "UTF-16LE 공유 파일이 깨졌습니다")
         self.assertNotIn("Tĭ", before["text"])
         self.assertIn("박동근", before["preview"])
+
+    def test_octet_stream_file_fills_and_renders(self):
+        """형식이 application/octet-stream 이어도 .txt 내용은 그대로 변환해야 한다."""
+        state = self._run(
+            meta={"fileName": SAMPLE_NAME, "fileType": "application/octet-stream", "isAudio": False,
+                  "modifiedAt": 1763384400000, "text": "", "title": ""},
+            file_bytes=SAMPLE_TEXT.encode("utf-8"),
+        )
+        before = state["before"]
+        self.assertEqual(before["text"], SAMPLE_TEXT, "형식이 application/octet-stream 이면 본문을 못 채웠습니다")
+        self.assertIn("김지훈", before["preview"])
+        self.assertEqual(before["title"].strip(), "김지훈")
+        self.assertTrue(before["noticeHidden"])
+        self.assertEqual(before["cacheKeys"], [])
 
     def test_shared_data_found_even_with_absolute_keys(self):
         """설치본 주소가 달라 캐시 키 모양이 어긋나도 찾아내야 한다."""

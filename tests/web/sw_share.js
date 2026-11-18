@@ -171,7 +171,27 @@
     )
   );
 
-  // 5) 공유 지점이 아닌 POST 는 가로채지 않는다
+  // 5) 삼성 음성녹음이 .txt 를 application/octet-stream 으로 넘기는 경우 — 글 파일로 담아야 한다
+  scenario(
+    "octetStreamFile",
+    SHARE_URL,
+    makeForm(
+      { title: "", text: "" },
+      [makeFile("음성 녹음 김지훈_261117_210000.txt", "application/octet-stream", root.__IN__.utf8Bytes)]
+    )
+  );
+
+  // 6) 확장자는 .m4a 인데 형식이 application/octet-stream 인 경우 — 이름을 보고 음성으로 알아본다
+  scenario(
+    "octetStreamAudio",
+    SHARE_URL,
+    makeForm(
+      { title: "", text: "" },
+      [makeFile("통화 녹음 김지훈_261117_210000.m4a", "application/octet-stream", root.__IN__.audioBytes)]
+    )
+  );
+
+  // 7) 공유 지점이 아닌 POST 는 가로채지 않는다
   scenario("otherPost", SCOPE + "other-endpoint", makeForm({ text: "무시" }, []));
 
   queue.then(function () {
