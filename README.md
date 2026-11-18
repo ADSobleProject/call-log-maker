@@ -79,6 +79,7 @@ PC 없이 휴대폰 브라우저에서 바로 씁니다. 삼성 “음성녹음�
 | 지움 | 앱이 한 번 읽으면 임시 캐시에서 바로 삭제 (기기에 통화 내용이 남지 않음) |
 | 안 되는 것 | 음성 파일(`.m4a`)은 브라우저에서 글자로 옮길 수 없어 안내만 띄운다 — 삼성 녹음 앱에서 **텍스트(.txt)로 변환한 뒤 공유**하거나 PC 버전을 쓰면 된다 |
 | 조건 | 크롬(안드로이드)에서 **홈 화면에 앱으로 설치한 상태**여야 공유 시트에 뜬다. iOS 사파리는 `share_target` 을 지원하지 않는다 |
+| 이미 설치해 둔 경우 | 크롬은 **설치할 때** 매니페스트를 읽어 공유 대상으로 등록한다. 이 기능 전에 설치해 두었다면 공유 목록에 안 보일 수 있으니, 홈 화면 아이콘을 지우고 다시 설치하면 확실하다 |
 
 ---
 
@@ -264,7 +265,7 @@ docs/            휴대폰 웹앱 (GitHub Pages 로 그대로 배포 · 빌드 �
 setup_env.py     환경 준비(.venv 생성·복구, 필수→선택 패키지 순서 설치)
 requirements.txt        필수: python-docx
 requirements-audio.txt  선택: faster-whisper + av<19 (음성 변환, PyAV 19 는 faster-whisper 와 비호환)
-tests/           190개 자동화 테스트 (웹앱 JS · PWA · 공유 메뉴 테스트 포함)
+tests/           191개 자동화 테스트 (웹앱 JS · PWA · 공유 메뉴 테스트 포함)
   test_pwa.py           매니페스트·아이콘·서비스 워커 검사
   test_share_target.py  공유 메뉴: 매니페스트 스키마 · POST 가로채기 · ?shared=1 화면 처리
   web/run_js_tests.js   브라우저 없이 도는 JS 테스트 (Node 또는 quickjs)
@@ -278,7 +279,7 @@ python setup_env.py --check                 # 환경 상태만 확인(아무것�
 python setup_env.py --core-only             # .txt 변환용 패키지만 설치
 python setup_env.py --repair                # 음성 패키지 설치 다시 시도
 python -m unittest discover -s tests -t .   # 테스트 (웹앱 JS 테스트는 quickjs 가 있을 때만 실행)
-pip install quickjs                         # 웹앱 JS 테스트까지 돌릴 때 (없으면 그 8개는 건너뜀)
+pip install quickjs                         # 웹앱 JS 테스트까지 돌릴 때 (없으면 그 22개는 건너뜀)
 node tests/web/run_js_tests.js              # Node 가 있으면 JS 테스트만 따로
 python -m calllog demo                      # 샘플로 결과 미리보기
 python -m calllog doctor                    # 설치·설정 점검
